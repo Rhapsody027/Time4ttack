@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "fh12",
+      "name": "fh6",
       "dependencies": {
         "ws": "^8.21.0",
       },
