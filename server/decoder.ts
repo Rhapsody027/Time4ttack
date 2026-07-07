@@ -1,97 +1,57 @@
-export interface CornerQuad {
-  fl: number;
-  fr: number;
-  rl: number;
-  rr: number;
-}
+// server/decoder.ts
+import type { Quad, BackendTelemetryData } from "../src/useTelemetry";
 
-export interface DecodedTelemetry {
-  rpm: number;
-  rpmMax: number;
-  gear: number;
-  speedKmh: number;
-  throttle: number;
-  brake: number;
-  steer: number;
-  acceleration: { x: number; y: number; z: number };
-  gForce: { lateral: number; longitudinal: number };
-  car: { drivetrain: number };
-  slipRatio: CornerQuad;
-  slipAngle: CornerQuad;
-  suspensionMeters: CornerQuad;
-  lap: {
-    number: number;
-    racePosition: number;
-  };
-}
+export const HORIZON_CAR_DASH_BYTES = 324;
+const HORIZON_DASH_BASE = 244;
 
-export function decodeFh6Packet(buf: Buffer): DecodedTelemetry | null {
-  // Forza V2 Data Out 封包標準長度為 324 bytes
-  if (buf.length < 311) return null;
+const msToKmh = (ms: number): number => ms * 3.6;
 
-  // 1. 基礎駕駛數據
-  const rpm = buf.readFloatLE(16);
-  const rpmMax = buf.readFloatLE(8);
-  const gear = buf.readUInt8(307); // 0=R, 15=N, 1..6=Gears
-  const speedMps = buf.readFloatLE(244); // 原始單位為每秒公尺
-  const speedKmh = speedMps * 3.6;
+export function decodeFh6Packet(buf: Buffer): BackendTelemetryData | null {
+	if (buf.length !== HORIZON_CAR_DASH_BYTES) return null;
 
-  const throttle = buf.readUInt8(308) / 255;
-  const brake = buf.readUInt8(309) / 255;
-  const steer = buf.readInt8(320) / 127; // 歸一化到 -1.0 ~ 1.0
+	const f32 = (o: number) => buf.readFloatLE(o);
+	const u8 = (o: number) => buf.readUInt8(o);
+	const s8 = (o: number) => buf.readInt8(o);
+	const s32 = (o: number) => buf.readInt32LE(o);
+	const u16 = (o: number) => buf.readUInt16LE(o);
 
-  // 2. 🚀 局部車體三軸加速度 (Offset: X=232, Y=236, Z=240)
-  const accelX = buf.readFloatLE(232); // X
-  const accelY = buf.readFloatLE(236); // Y
-  const accelZ = buf.readFloatLE(240); // Z
+	const readQuad = (o: number): Quad => ({
+		fl: f32(o),
+		fr: f32(o + 4),
+		rl: f32(o + 8),
+		rr: f32(o + 12),
+	});
 
-  // 3. 四輪打滑生數據
-  const slipRatio = {
-    fl: buf.readFloatLE(112),
-    fr: buf.readFloatLE(116),
-    rl: buf.readFloatLE(120),
-    rr: buf.readFloatLE(124),
-  };
+	const d = HORIZON_DASH_BASE;
 
-  const slipAngle = {
-    fl: buf.readFloatLE(128),
-    fr: buf.readFloatLE(132),
-    rl: buf.readFloatLE(136),
-    rr: buf.readFloatLE(140),
-  };
+	const latAccel = f32(20);
+	const longAccel = f32(28);
 
-  const suspensionMeters = {
-    fl: buf.readFloatLE(64),
-    fr: buf.readFloatLE(68),
-    rl: buf.readFloatLE(72),
-    rr: buf.readFloatLE(76),
-  };
+	return {
+		rpm: f32(16),
+		rpmMax: f32(8),
+		gear: u8(d + 75),
+		speedKmh: msToKmh(f32(d + 12)),
 
-  // 4. 比賽單圈與傳動
-  const lapNumber = buf.readUInt16LE(292);
-  const racePosition = buf.readUInt8(306);
-  const drivetrain = buf.readUInt32LE(212); // 0=FWD, 1=RWD, 2=AWD
+		throttle: u8(d + 71) / 255,
+		brake: u8(d + 72) / 255,
+		steer: s8(d + 76) / 127,
 
-  return {
-    rpm,
-    rpmMax,
-    gear,
-    speedKmh,
-    throttle,
-    brake,
-    steer,
-    acceleration: { x: accelX, y: accelY, z: accelZ },
-    gForce: {
-      lateral: accelX / 9.80665,
-      longitudinal: accelY / 9.80665,
-    },
-    car: { drivetrain },
-    slipRatio,
-    slipAngle,
-    suspensionMeters,
-    lap: {
-      number: lapNumber,
-      racePosition,
-    },
-  };
+		acceleration: {
+			x: latAccel,
+			y: f32(24),
+			z: longAccel,
+		},
+
+		gForce: {
+			lateral: latAccel / 9.80665,
+			longitudinal: longAccel / 9.80665,
+		},
+
+		car: { drivetrain: s32(224) },
+		slipRatio: readQuad(84),
+		slipAngle: readQuad(164),
+		suspensionMeters: readQuad(196),
+		lap: { number: u16(d + 68), racePosition: u8(d + 70) },
+	};
 }

@@ -1,8 +1,10 @@
+// src/components/Fh6Dashboard.tsx
 import { useEffect, useRef } from "react";
 import {
 	useTelemetry,
 	useTelemetryStore,
 	type CornerKey,
+	type TelemetryStoreState,
 } from "../useTelemetry";
 
 type GPoint = { x: number; y: number };
@@ -34,44 +36,64 @@ function statusLabel(stale: boolean, connected: boolean): string | null {
 		: "[ DISCONNECTED / WAITING FOR FH6 GAME DATA ]";
 }
 
-// 🚀 輪胎傻瓜元件：不負責任何物理計算，純消費 Zustand 數據
 function WheelCell({ cornerKey }: { cornerKey: CornerKey }) {
-	// 精確訂閱特定輪胎的狀態與大腦算好的發光漸層背景
-	const wheel = useTelemetryStore((state) => state.wheels[cornerKey]);
-	const stale = useTelemetryStore((state) => state.stale);
+	const wheel = useTelemetryStore(
+		(state: TelemetryStoreState) => state.wheels[cornerKey],
+	);
+	const stale = useTelemetryStore((state: TelemetryStoreState) => state.stale);
+	const telemetry = useTelemetryStore(
+		(state: TelemetryStoreState) => state.telemetry,
+	);
 
 	const isFront = cornerKey === "fl" || cornerKey === "fr";
 	const steerRotation = isFront ? wheel.steerDegrees : 0;
 
-	const showRatioAxis = true;
-	const showAngleAxis = isFront;
+	const isAnyOut = wheel.isRatioOut || wheel.isAngleOut;
+	const isAnyPeak = wheel.isRatioPeak || wheel.isAnglePeak;
 
-	// 🚀 從大腦直接提取自適應狀態顏色與 Hysteresis 防閃爍結果
-	const borderColor =
-		wheel.ratioWarning || wheel.angleWarning
-			? "#ef4444"
-			: wheel.ratioInBand || wheel.angleInBand
-				? "#00F0FF"
-				: "#064e3b";
+	const borderColor = isAnyOut ? "#ef4444" : isAnyPeak ? "#00F0FF" : "#064e3b";
+	const shadow = isAnyOut
+		? "0 0 14px rgba(239, 68, 68, 0.5)"
+		: isAnyPeak
+			? "0 0 14px rgba(0, 240, 255, 0.6)"
+			: "none";
 
-	const axisColor =
-		wheel.ratioWarning || wheel.angleWarning
-			? "#ef4444"
-			: wheel.ratioInBand || wheel.angleInBand
-				? "#00F0FF"
-				: "#27272a";
+	const latG = telemetry?.gForce.lateral ?? 0;
+	const lngG = telemetry?.gForce.longitudinal ?? 0;
 
-	const shadow =
-		wheel.ratioInBand || wheel.angleInBand ? "0 0 12px #00F0FF" : "none";
+	const isRightSide = cornerKey === "fr" || cornerKey === "rr";
+	const isFrontSide = cornerKey === "fl" || cornerKey === "fr";
 
-	// 🚀 荷重顯化：直接讀取在大腦裡面算好的配重比例分數
+	let longLoad = 0;
+	let latLoad = 0;
+
+	// 1. 縱向重量分配 (lngG < 0 為煞車前傾，重量砸向前輪)
+	if (lngG < 0 && isFrontSide) {
+		longLoad = Math.abs(lngG) * 0.6;
+	} else if (lngG > 0 && !isFrontSide) {
+		longLoad = lngG * 0.4; // 加速後仰，重量砸向後輪
+	}
+
+	// 2. 橫向重量分配：暴力取反修正（拋棄 Steer，只吃 latG，直接對調 > 與 < 符號判定）
+	if (latG < 0 && isRightSide) {
+		latLoad = Math.abs(latG) * 0.6; // 🚀 左轉（原本 latG 為正，現在對調為負時點亮外側右輪 FR/RR）
+	} else if (latG > 0 && !isRightSide) {
+		latLoad = latG * 0.6; // 🚀 右轉（點亮外側左輪 FL/RL）
+	}
+
+	const totalDynamicWeight = longLoad + latLoad;
 	const loadGlow =
-		wheel.loadScore > 0.15
-			? `radial-gradient(circle at center, rgba(239, 68, 68, ${Math.min(wheel.loadScore * 0.4, 0.6)}) 0%, transparent 75%)`
+		totalDynamicWeight > 0.15
+			? `radial-gradient(circle at center, rgba(239, 68, 68, ${Math.min(totalDynamicWeight * 0.5, 0.65)}) 0%, transparent 85%)`
 			: "transparent";
 
+	// 原始方向判定
 	const ratioDirection = wheel.slipRatio >= 0 ? "down" : "up";
 	const angleDirection = wheel.slipAngle <= 0 ? "left" : "right";
+
+	// 🚀 原始 140% 破框映射
+	const ratioHeightStyle = `${(wheel.ratioPercent / 100) * 50}%`;
+	const angleWidthStyle = `${(wheel.anglePercent / 100) * 50}%`;
 
 	return (
 		<div className="relative flex h-32 w-24 items-center justify-center overflow-visible bg-transparent">
@@ -82,7 +104,7 @@ function WheelCell({ cornerKey }: { cornerKey: CornerKey }) {
 			</span>
 
 			<div
-				className="absolute h-24 w-14 rounded-md border-solid bg-transparent overflow-visible z-10"
+				className="absolute h-24 w-14 rounded-md border-solid bg-transparent overflow-visible z-10 transition-all duration-75"
 				style={{
 					transform: `rotate(${steerRotation}deg)`,
 					borderWidth: "2px",
@@ -92,44 +114,59 @@ function WheelCell({ cornerKey }: { cornerKey: CornerKey }) {
 					background: loadGlow,
 				}}
 			>
-				{showRatioAxis && (
-					<div className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 opacity-25 pointer-events-none bg-zinc-800" />
+				<div className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 opacity-20 pointer-events-none bg-zinc-700" />
+				{isFront && (
+					<div className="absolute top-1/2 left-0 right-0 h-px -translate-y-1/2 opacity-20 pointer-events-none bg-zinc-700" />
 				)}
-				{showAngleAxis && (
-					<div className="absolute top-1/2 left-0 right-0 h-px -translate-y-1/2 opacity-25 pointer-events-none bg-zinc-800" />
-				)}
-
 				<div
 					className="absolute left-1/2 top-1/2 h-0.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full z-10"
-					style={{ background: axisColor }}
+					style={{
+						background: isAnyOut
+							? "#ef4444"
+							: isAnyPeak
+								? "#00F0FF"
+								: "#3f3f46",
+					}}
 				/>
 
-				{/* 縱向光條 */}
-				{showRatioAxis && (
-					<div
-						className="absolute left-1/2 w-0.75 rounded-full z-20"
-						style={{
-							top: "50%",
-							height: `${wheel.ratioPercent}%`,
-							background: axisColor,
-							boxShadow: shadow,
-							transform:
-								ratioDirection === "down"
-									? "translate(-50%, 0)"
-									: "translate(-50%, -100%)",
-						}}
-					/>
-				)}
+				<div
+					className="absolute left-1/2 w-0.75 rounded-full z-20 transition-all duration-75"
+					style={{
+						top: "50%",
+						height: ratioHeightStyle,
+						background: wheel.isRatioOut
+							? "#ef4444"
+							: wheel.isRatioPeak
+								? "#00F0FF"
+								: "#52525b",
+						boxShadow: wheel.isRatioOut
+							? "0 0 8px #ef4444"
+							: wheel.isRatioPeak
+								? "0 0 8px #00F0FF"
+								: "none",
+						transform:
+							ratioDirection === "down"
+								? "translate(-50%, 0)"
+								: "translate(-50%, -100%)",
+					}}
+				/>
 
-				{/* 橫向光條 */}
-				{showAngleAxis && (
+				{isFront && (
 					<div
-						className="absolute top-1/2 h-0.75 rounded-full z-20 origin-left"
+						className="absolute top-1/2 h-0.75 rounded-full z-20 origin-left transition-all duration-75"
 						style={{
 							left: "50%",
-							width: `${wheel.anglePercent / 2}%`,
-							background: axisColor,
-							boxShadow: shadow,
+							width: angleWidthStyle,
+							background: wheel.isAngleOut
+								? "#ef4444"
+								: wheel.isAnglePeak
+									? "#00F0FF"
+									: "#52525b",
+							boxShadow: wheel.isAngleOut
+								? "0 0 8px #ef4444"
+								: wheel.isAnglePeak
+									? "0 0 8px #00F0FF"
+									: "none",
 							transform:
 								angleDirection === "right"
 									? "translateY(-50%) scaleX(1)"
@@ -142,11 +179,13 @@ function WheelCell({ cornerKey }: { cornerKey: CornerKey }) {
 	);
 }
 
-// 🚀 G力圓盤：直接訂閱 Zustand 大腦處理好的 Canvas 像素座標點
 function GForceCell() {
-	const dotPos = useTelemetryStore((state) => state.gForceDot);
-	const telemetry = useTelemetryStore((state) => state.telemetry);
-
+	const dotPos = useTelemetryStore(
+		(state: TelemetryStoreState) => state.gForceDot,
+	);
+	const telemetry = useTelemetryStore(
+		(state: TelemetryStoreState) => state.telemetry,
+	);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const trailRef = useRef<GPoint[]>([]);
 	const frameCounterRef = useRef(0);
@@ -163,7 +202,6 @@ function GForceCell() {
 		const size = canvas.width;
 		context.setTransform(size / 100, 0, 0, size / 100, 0, 0);
 		context.clearRect(0, 0, 100, 100);
-
 		const trail = trailRef.current;
 		context.fillStyle = "#fbbf24";
 		for (let index = 0; index < trail.length; index += 1) {
@@ -174,12 +212,10 @@ function GForceCell() {
 			context.fill();
 		}
 		context.globalAlpha = 1;
-
 		context.fillStyle = "rgba(34, 197, 94, 0.45)";
 		context.beginPath();
 		context.arc(dotPos.x, dotPos.y, 6, 0, Math.PI * 2);
 		context.fill();
-
 		context.fillStyle = "#4ade80";
 		context.beginPath();
 		context.arc(dotPos.x, dotPos.y, 2.5, 0, Math.PI * 2);
@@ -297,7 +333,7 @@ function GForceCell() {
 				G-G ENVELOPE
 			</span>
 			<span className="absolute right-2 bottom-2 font-mono text-xs tabular-nums text-zinc-300">
-				{formatSigned(-latG, 2)} <span className="text-zinc-500">·</span>{" "}
+				{formatSigned(latG, 2)} <span className="text-zinc-500">·</span>{" "}
 				{formatSigned(lngG, 2)} <span className="text-zinc-500">g</span>
 			</span>
 		</div>
@@ -305,7 +341,9 @@ function GForceCell() {
 }
 
 function LapDeltaCell() {
-	const telemetry = useTelemetryStore((state) => state.telemetry);
+	const telemetry = useTelemetryStore(
+		(state: TelemetryStoreState) => state.telemetry,
+	);
 	return (
 		<div className="flex flex-col items-center justify-center text-center">
 			<span className="text-[9px] font-bold tracking-widest text-gray-600">
@@ -321,11 +359,19 @@ function LapDeltaCell() {
 }
 
 function GearCell() {
-	const gearLabel = useTelemetryStore((state) => state.gearLabel);
-	const rpmPercent = useTelemetryStore((state) => state.rpmPercent);
-	const shiftOn = useTelemetryStore((state) => state.shiftOn);
-	const speedDisplay = useTelemetryStore((state) => state.speedDisplay);
-	const stale = useTelemetryStore((state) => state.stale);
+	const gearLabel = useTelemetryStore(
+		(state: TelemetryStoreState) => state.gearLabel,
+	);
+	const rpmPercent = useTelemetryStore(
+		(state: TelemetryStoreState) => state.rpmPercent,
+	);
+	const shiftOn = useTelemetryStore(
+		(state: TelemetryStoreState) => state.shiftOn,
+	);
+	const speedDisplay = useTelemetryStore(
+		(state: TelemetryStoreState) => state.speedDisplay,
+	);
+	const stale = useTelemetryStore((state: TelemetryStoreState) => state.stale);
 
 	return (
 		<div
@@ -356,9 +402,12 @@ function GearCell() {
 }
 
 function PedalCell() {
-	const telemetry = useTelemetryStore((state) => state.telemetry);
-	const pedalOverlap = useTelemetryStore((state) => state.pedalOverlap);
-
+	const telemetry = useTelemetryStore(
+		(state: TelemetryStoreState) => state.telemetry,
+	);
+	const pedalOverlap = useTelemetryStore(
+		(state: TelemetryStoreState) => state.pedalOverlap,
+	);
 	const throttle = telemetry?.throttle ?? 0;
 	const brake = telemetry?.brake ?? 0;
 
@@ -398,8 +447,12 @@ function PedalCell() {
 }
 
 function InsightCell() {
-	const drivingInsights = useTelemetryStore((state) => state.drivingInsights);
-	const freeRoam = useTelemetryStore((state) => state.freeRoam);
+	const drivingInsights = useTelemetryStore(
+		(state: TelemetryStoreState) => state.drivingInsights,
+	);
+	const freeRoam = useTelemetryStore(
+		(state: TelemetryStoreState) => state.freeRoam,
+	);
 
 	return (
 		<div className="flex flex-col justify-center border-t border-b border-gray-900 px-2 py-1">
@@ -411,7 +464,7 @@ function InsightCell() {
 			</div>
 			{freeRoam ? (
 				<div className="rounded border border-white/10 bg-white/5 px-2 py-3 text-center text-[10px] font-bold tracking-[0.24em] text-slate-300">
-					[ STANDBY / FREE ROAM MODE ]
+					[ STANDBY / FREE ROAM ]
 				</div>
 			) : (
 				<>
@@ -433,7 +486,7 @@ function InsightCell() {
 							</span>
 						</div>
 						<div className="flex justify-between gap-4">
-							<span className="text-[9px] font-bold text-gray-600">
+							<span className="text-[9px] font-bold text-cyan-400">
 								EXIT TIMING
 							</span>
 							<span className="font-bold text-cyan-400">
@@ -454,7 +507,6 @@ function InsightCell() {
 }
 
 export function Fh6Dashboard() {
-	// 🚀 掛載此頂層組件時全自動啟動與 Bun 的連線
 	const telemetry = useTelemetry();
 	const label = statusLabel(telemetry.stale, telemetry.connected);
 

@@ -1,3 +1,4 @@
+// src/useTelemetry.ts
 import { create } from "zustand";
 
 export type CornerKey = "fl" | "fr" | "rl" | "rr";
@@ -11,16 +12,14 @@ export type WheelView = {
 	slipAngle: number;
 	suspensionMeters: number;
 	loadScore: number;
-	isTireExploded: boolean;
 	ratioPercent: number;
 	anglePercent: number;
-	ratioWarning: boolean;
-	angleWarning: boolean;
-	ratioInBand: boolean;
-	angleInBand: boolean;
+	isRatioOut: boolean;
+	isAngleOut: boolean;
+	isRatioPeak: boolean;
+	isAnglePeak: boolean;
 };
 
-// 🚀 對齊後端 Bun 吐出來的全新無殼物理 JSON 資料模型
 export type BackendTelemetryData = {
 	rpm: number;
 	rpmMax: number;
@@ -35,13 +34,9 @@ export type BackendTelemetryData = {
 	slipRatio: Quad;
 	slipAngle: Quad;
 	suspensionMeters: Quad;
-	lap: {
-		number: number;
-		racePosition: number;
-	};
+	lap: { number: number; racePosition: number };
 };
 
-// 🚀 為了相容原本的 Fh6Dashboard UI，保留這個結構模型
 type LegacyNormalizedTelemetry = {
 	throttle: number;
 	brake: number;
@@ -54,7 +49,7 @@ export type TelemetryStoreState = {
 	connected: boolean;
 	lastPacketAt: number | null;
 	stale: boolean;
-	telemetry: LegacyNormalizedTelemetry | null; // 給 UI 讀取基礎 G 值與踏板
+	telemetry: LegacyNormalizedTelemetry | null;
 	rpmPercent: number;
 	shiftOn: boolean;
 	gearLabel: string;
@@ -71,15 +66,13 @@ export type TelemetryStoreState = {
 		rank: string;
 	};
 	wheels: Record<CornerKey, WheelView>;
-
-	// 🚀 動作（Actions）
 	initWebSocket: () => void;
 	updateTelemetry: (data: BackendTelemetryData) => void;
 	setDisconnected: () => void;
 };
 
 const WS_URL = import.meta.env.VITE_FH6_WS_URL ?? "ws://localhost:3001";
-const G_RANGE = 2;
+const G_RANGE = 2.0;
 const G_RIM_RADIUS = 44;
 
 function clamp(value: number, min: number, max: number): number {
@@ -95,17 +88,15 @@ function createDefaultWheel(cornerKey: CornerKey): WheelView {
 		slipAngle: 0,
 		suspensionMeters: 0,
 		loadScore: 0,
-		isTireExploded: false,
 		ratioPercent: 0,
 		anglePercent: 0,
-		ratioWarning: false,
-		angleWarning: false,
-		ratioInBand: false,
-		angleInBand: false,
+		isRatioOut: false,
+		isAngleOut: false,
+		isRatioPeak: false,
+		isAnglePeak: false,
 	};
 }
 
-// 🚀 建立 Zustand 全域狀態大腦
 export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 	let ws: WebSocket | null = null;
 
@@ -122,8 +113,8 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 		pedalOverlap: false,
 		freeRoam: true,
 		drivingInsights: {
-			modeLabel: "[ STANDBY / FREE ROAM MODE ]",
-			statusLabel: "[ STANDBY / FREE ROAM MODE ]",
+			modeLabel: "[ STANDBY ]",
+			statusLabel: "[ STANDBY ]",
 			gripEfficiency: 100,
 			trailBrakingSmoothness: 100,
 			throttleCommit: "MATURE",
@@ -137,40 +128,27 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 		},
 
 		initWebSocket: () => {
-			if (ws) return; // 避免重複連線
-
+			if (ws) return;
 			const connect = () => {
 				ws = new WebSocket(WS_URL);
-
-				ws.onopen = () => {
-					set({ connected: true, stale: false });
-				};
-
-				ws.onmessage = (event) => {
+				ws.onopen = () => set({ connected: true, stale: false });
+				ws.onmessage = (e) => {
 					try {
-						const parsed = JSON.parse(event.data);
-						if (parsed.type === "telemetry" && parsed.data) {
+						const parsed = JSON.parse(e.data);
+						if (parsed.type === "telemetry" && parsed.data)
 							get().updateTelemetry(parsed.data);
-						}
-					} catch (e) {
-						// 忽略解析錯誤
-					}
+					} catch {}
 				};
-
 				ws.onclose = () => {
 					get().setDisconnected();
-					setTimeout(connect, 3000); // 3秒後自動重連
+					setTimeout(connect, 3000);
 				};
-
-				ws.onerror = () => {
-					get().setDisconnected();
-				};
+				ws.onerror = () => get().setDisconnected();
 			};
-
 			connect();
 		},
 
-		setDisconnected: () => {
+		setDisconnected: () =>
 			set({
 				connected: false,
 				stale: true,
@@ -178,24 +156,14 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 				speedDisplay: 0,
 				gForceDot: { x: 50, y: 50 },
 				freeRoam: true,
-				drivingInsights: {
-					modeLabel: "[ DISCONNECTED / WAITING FOR FH6 GAME DATA ]",
-					statusLabel: "[ DISCONNECTED / WAITING FOR FH6 GAME DATA ]",
-					gripEfficiency: 100,
-					trailBrakingSmoothness: 100,
-					throttleCommit: "--",
-					rank: "--",
-				},
-			});
-		},
+			}),
 
-		// 🚀 核心衍生數據加工廠 (Derived Data)
 		updateTelemetry: (raw) => {
 			const now = Date.now();
 			const rpmPercent =
 				raw.rpmMax > 0 ? clamp((raw.rpm / raw.rpmMax) * 100, 0, 100) : 0;
 
-			// G力圓盤幾何座標映射
+			// 🚀 最原始幾何映射：直接相加
 			const gForceDot = {
 				x: 50 - (raw.gForce.lateral / G_RANGE) * G_RIM_RADIUS,
 				y: 50 + (raw.gForce.longitudinal / G_RANGE) * G_RIM_RADIUS,
@@ -203,52 +171,41 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 
 			const isFreeRoam = raw.lap.number === 0 && raw.lap.racePosition === 0;
 
-			// 自適應多車型閥值切換 (利用轉速上限判斷廠車與街車)
-			const isRaceCar = raw.rpmMax > 7800;
-			const profile = isRaceCar
-				? { ratioBlue: 0.15, ratioRed: 0.35, angleBlue: 0.12, angleRed: 0.25 } // 緊繃賽車熱熔胎
-				: { ratioBlue: 0.3, ratioRed: 0.7, angleBlue: 0.2, angleRed: 0.45 }; // 高容忍度街胎
-
-			// 四輪視圖數據直接加工
 			const updatedWheels = (["fl", "fr", "rl", "rr"] as CornerKey[]).reduce(
 				(acc, key) => {
-					const slipRatio = raw.slipRatio[key];
-					const slipAngle = raw.slipAngle[key];
-					const suspensionMeters = raw.suspensionMeters[key];
+					let rawRatio = raw.slipRatio[key];
+					const rawAngle = Math.abs(raw.slipAngle[key]);
 
-					const cleanRatio = Math.abs(slipRatio) < 0.02 ? 0 : slipRatio;
-					const ratioMagnitude = Math.abs(cleanRatio);
-					const angleMagnitude = Math.abs(slipAngle);
+					const isFront = key === "fl" || key === "fr";
 
-					const ratioInBand =
-						ratioMagnitude >= profile.ratioBlue &&
-						ratioMagnitude <= profile.ratioRed;
-					const angleInBand =
-						angleMagnitude >= profile.angleBlue &&
-						angleMagnitude <= profile.angleRed;
+					// 🚀 物理單向濾網：徹底抹平解除鎖死/鬆油門時的反彈二次雜訊
+					if (isFront && rawRatio > 0 && raw.brake === 0) rawRatio = 0;
+					if (!isFront && rawRatio < 0 && raw.throttle === 0) rawRatio = 0;
 
-					const ratioWarning = ratioMagnitude > profile.ratioRed;
-					const angleWarning = angleMagnitude > profile.angleRed;
+					const ratioMag = Math.abs(rawRatio);
+
+					// 🚀 拔除 Peak 藍色臨界判定，只保留純粹的 1.0 破框失控紅色警告
+					const isRatioOut = ratioMag > 1.0;
+					const isAngleOut = rawAngle > 1.0;
+
+					// 幾何百分比計算
+					const ratioPercent = isRatioOut ? 140 : ratioMag * 100;
+					const anglePercent = isAngleOut ? 140 : rawAngle * 100;
 
 					acc[key] = {
 						label: key.toUpperCase(),
 						cornerKey: key,
-						steerDegrees: key === "fl" || key === "fr" ? raw.steer * 27.7 : 0,
-						slipRatio: cleanRatio,
-						slipAngle,
-						suspensionMeters,
-						loadScore: suspensionMeters, // 直接透傳數據由前端複合計算
-						isTireExploded: ratioWarning || angleWarning,
-						ratioPercent: ratioWarning
-							? 140
-							: Math.min(100, (ratioMagnitude / profile.ratioBlue) * 50),
-						anglePercent: angleWarning
-							? 140
-							: Math.min(100, (angleMagnitude / profile.angleBlue) * 50),
-						ratioWarning,
-						angleWarning,
-						ratioInBand,
-						angleInBand,
+						steerDegrees: isFront ? raw.steer * 27.7 : 0,
+						slipRatio: rawRatio,
+						slipAngle: raw.slipAngle[key],
+						suspensionMeters: raw.suspensionMeters[key],
+						loadScore: raw.suspensionMeters[key],
+						ratioPercent,
+						anglePercent,
+						isRatioOut,
+						isAngleOut,
+						isRatioPeak: false, // 🚀 永久鎖死為 false
+						isAnglePeak: false, // 🚀 永久鎖死為 false
 					};
 					return acc;
 				},
@@ -275,13 +232,9 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 					car: raw.car,
 				},
 				drivingInsights: {
-					modeLabel: isFreeRoam
-						? "[ STANDBY / FREE ROAM MODE ]"
-						: `LAP ${raw.lap.number}`,
-					statusLabel: isFreeRoam
-						? "[ STANDBY / FREE ROAM MODE ]"
-						: `LAP ${raw.lap.number} LIVE`,
-					gripEfficiency: 100, // 診斷引擎留待下一步處理
+					modeLabel: isFreeRoam ? "[ FREE ROAM ]" : `LAP ${raw.lap.number}`,
+					statusLabel: "LIVE",
+					gripEfficiency: 100,
 					trailBrakingSmoothness: 100,
 					throttleCommit: "MATURE",
 					rank: "A",
@@ -292,16 +245,12 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 	};
 });
 
-// 🚀 終極無痛針腳對齊：保留原本的 useTelemetry 導出，讓 Fh6Dashboard 完全不需修改程式碼
 export function useTelemetry() {
 	const store = useTelemetryStore();
-
-	// 安全檢查執行環境，只有在瀏覽器端才初始化 WebSocket
 	if (typeof globalThis !== "undefined" && "WebSocket" in globalThis) {
 		if (!store.connected && !useTelemetryStore.getState().connected) {
 			setTimeout(() => store.initWebSocket(), 0);
 		}
 	}
-
 	return store;
 }
