@@ -48,15 +48,11 @@ function WheelCell({ cornerKey }: { cornerKey: CornerKey }) {
 	const isFront = cornerKey === "fl" || cornerKey === "fr";
 	const steerRotation = isFront ? wheel.steerDegrees : 0;
 
+	// 🚀 核心邏輯一：無情回歸最原始二元判定，超過 100% (也就是大於 1.0) 才是 Out 觸發變紅
 	const isAnyOut = wheel.isRatioOut || wheel.isAngleOut;
-	const isAnyPeak = wheel.isRatioPeak || wheel.isAnglePeak;
 
-	const borderColor = isAnyOut ? "#ef4444" : isAnyPeak ? "#00F0FF" : "#064e3b";
-	const shadow = isAnyOut
-		? "0 0 14px rgba(239, 68, 68, 0.5)"
-		: isAnyPeak
-			? "0 0 14px rgba(0, 240, 255, 0.6)"
-			: "none";
+	const borderColor = isAnyOut ? "#ef4444" : "#064e3b";
+	const shadow = isAnyOut ? "0 0 14px rgba(239, 68, 68, 0.5)" : "none";
 
 	const latG = telemetry?.gForce.lateral ?? 0;
 	const lngG = telemetry?.gForce.longitudinal ?? 0;
@@ -71,14 +67,14 @@ function WheelCell({ cornerKey }: { cornerKey: CornerKey }) {
 	if (lngG < 0 && isFrontSide) {
 		longLoad = Math.abs(lngG) * 0.6;
 	} else if (lngG > 0 && !isFrontSide) {
-		longLoad = lngG * 0.4; // 加速後仰，重量砸向後輪
+		longLoad = lngG * 0.4; 
 	}
 
-	// 2. 橫向重量分配：暴力取反修正（拋棄 Steer，只吃 latG，直接對調 > 與 < 符號判定）
+	// 2. 橫向重量分配：保持你調校完美的方向，完全不動
 	if (latG < 0 && isRightSide) {
-		latLoad = Math.abs(latG) * 0.6; // 🚀 左轉（原本 latG 為正，現在對調為負時點亮外側右輪 FR/RR）
+		latLoad = Math.abs(latG) * 0.6; 
 	} else if (latG > 0 && !isRightSide) {
-		latLoad = latG * 0.6; // 🚀 右轉（點亮外側左輪 FL/RL）
+		latLoad = latG * 0.6; 
 	}
 
 	const totalDynamicWeight = longLoad + latLoad;
@@ -87,14 +83,15 @@ function WheelCell({ cornerKey }: { cornerKey: CornerKey }) {
 			? `radial-gradient(circle at center, rgba(239, 68, 68, ${Math.min(totalDynamicWeight * 0.5, 0.65)}) 0%, transparent 85%)`
 			: "transparent";
 
-	// 原始方向判定
+	// 🚀 核心邏輯二：完全保留生數據的原始方向，不做任何反彈濾波與閹割
 	const ratioDirection = wheel.slipRatio >= 0 ? "down" : "up";
 	const angleDirection = wheel.slipAngle <= 0 ? "left" : "right";
 
-	// 🚀 原始 140% 破框映射
-	const ratioHeightStyle = `${(wheel.ratioPercent / 100) * 50}%`;
-	const angleWidthStyle = `${(wheel.anglePercent / 100) * 50}%`;
-
+	// 🚀 核心幾何三：長度完全、赤裸地綁定原始數據百分比。
+	// 框內極限 1.0 等於半框高寬的 50%。一旦失控超越 1.0，線條長度直接衝刺突破到 75%（對齊 150% 破框紅線長度）
+	const ratioHeightStyle = wheel.isRatioOut ? "75%" : `${(wheel.ratioPercent / 100) * 50}%`;
+	const isLatGZero = Math.abs(latG) < 0.15;
+	const angleWidthStyle = wheel.isAngleOut ? "75%" : isLatGZero ? "0%" : `${(wheel.anglePercent / 100) * 50}%`;
 	return (
 		<div className="relative flex h-32 w-24 items-center justify-center overflow-visible bg-transparent">
 			<span
@@ -120,30 +117,17 @@ function WheelCell({ cornerKey }: { cornerKey: CornerKey }) {
 				)}
 				<div
 					className="absolute left-1/2 top-1/2 h-0.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full z-10"
-					style={{
-						background: isAnyOut
-							? "#ef4444"
-							: isAnyPeak
-								? "#00F0FF"
-								: "#3f3f46",
-					}}
+					style={{ background: isAnyOut ? "#ef4444" : "#3f3f46" }}
 				/>
 
+				{/* 縱向打滑線：框內為精緻灰，突破 1.0 失控時刺破框外並炸成紅色 */}
 				<div
 					className="absolute left-1/2 w-0.75 rounded-full z-20 transition-all duration-75"
 					style={{
 						top: "50%",
 						height: ratioHeightStyle,
-						background: wheel.isRatioOut
-							? "#ef4444"
-							: wheel.isRatioPeak
-								? "#00F0FF"
-								: "#52525b",
-						boxShadow: wheel.isRatioOut
-							? "0 0 8px #ef4444"
-							: wheel.isRatioPeak
-								? "0 0 8px #00F0FF"
-								: "none",
+						background: wheel.isRatioOut ? "#ef4444" : "#52525b",
+						boxShadow: wheel.isRatioOut ? "0 0 8px #ef4444" : "none",
 						transform:
 							ratioDirection === "down"
 								? "translate(-50%, 0)"
@@ -151,22 +135,15 @@ function WheelCell({ cornerKey }: { cornerKey: CornerKey }) {
 					}}
 				/>
 
+				{/* 橫向滑移線：框內為精緻灰，突破 1.0 失控時刺破框外並炸成紅色 */}
 				{isFront && (
 					<div
 						className="absolute top-1/2 h-0.75 rounded-full z-20 origin-left transition-all duration-75"
 						style={{
 							left: "50%",
 							width: angleWidthStyle,
-							background: wheel.isAngleOut
-								? "#ef4444"
-								: wheel.isAnglePeak
-									? "#00F0FF"
-									: "#52525b",
-							boxShadow: wheel.isAngleOut
-								? "0 0 8px #ef4444"
-								: wheel.isAnglePeak
-									? "0 0 8px #00F0FF"
-									: "none",
+							background: wheel.isAngleOut ? "#ef4444" : "#52525b",
+							boxShadow: wheel.isAngleOut ? "0 0 8px #ef4444" : "none",
 							transform:
 								angleDirection === "right"
 									? "translateY(-50%) scaleX(1)"
@@ -333,8 +310,8 @@ function GForceCell() {
 				G-G ENVELOPE
 			</span>
 			<span className="absolute right-2 bottom-2 font-mono text-xs tabular-nums text-zinc-300">
-				{formatSigned(latG, 2)} <span className="text-zinc-500">·</span>{" "}
-				{formatSigned(lngG, 2)} <span className="text-zinc-500">g</span>
+				{formatNumber(Math.abs(latG), 2)} <span className="text-zinc-500">·</span>{" "}
+				{formatNumber(Math.abs(lngG), 2)} <span className="text-zinc-500">g</span>
 			</span>
 		</div>
 	);
