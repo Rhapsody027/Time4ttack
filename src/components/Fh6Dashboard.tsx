@@ -9,9 +9,7 @@ import { InsightCell } from "./InsightCell";
 
 function statusLabel(stale: boolean, connected: boolean): string | null {
 	if (!stale) return null;
-	return connected
-		? "[ WAITING FOR FH6 GAME DATA ]"
-		: "[ DISCONNECTED / WAITING FOR FH6 GAME DATA ]";
+	return connected ? "STANDBY" : "DISCONNECTED";
 }
 
 export function Fh6Dashboard() {
@@ -19,26 +17,78 @@ export function Fh6Dashboard() {
 	const label = statusLabel(telemetry.stale, telemetry.connected);
 
 	return (
-		<main className="relative flex min-h-screen select-none items-center justify-center bg-[#050508] p-4 text-white font-mono">
+		// 全螢幕背景碳纖維紋理
+		<main className="relative flex h-screen w-screen select-none items-center justify-center carbon-fiber-bg text-white font-mono crt-screen overflow-hidden p-3">
+			{/* 背景淡紅戰術發光 */}
+			<div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_center,rgba(255,0,85,0.04)_0%,transparent_75%)]" />
+
+			{/* 連線警報 */}
 			{label ? (
-				<div className="pointer-events-none absolute top-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-cyan-500/30 bg-black/80 px-4 py-2 text-[10px] font-bold tracking-[0.3em] text-cyan-400 backdrop-blur-xl shadow-[0_0_15px_rgba(34,211,238,0.15)]">
-					{label}
+				<div className="pointer-events-none absolute top-4 left-1/2 z-30 -translate-x-1/2 border border-red-500 bg-black/95 px-4 py-1 text-[8px] font-black tracking-[0.2em] text-red-500 shadow-[0_0_15px_rgba(255,0,85,0.4)] racing-text">
+					⚠️ {label}
 				</div>
 			) : null}
 
-			{/* 🚀 完美還原：移除 items-center，回歸最原始的 Grid 幾何分配，轉速條完美復原 */}
-			<div className="grid h-180 w-120 max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] grid-cols-3 grid-rows-3 gap-x-4 gap-y-8 p-2">
-				<WheelCell cornerKey="fl" />
-				<GForceCell />
-				<WheelCell cornerKey="fr" />
+			{/* 🚀 主儀表板面板：限制最大寬度以維持長方形 */}
+			<div className="relative z-10 flex h-full w-full max-w-[420px] flex-col justify-between py-4 px-3 bg-[#020204] border border-zinc-900/80 shadow-[0_0_40px_rgba(0,0,0,0.8)]">
+				{/* 頂部：Time4ttack */}
+				<div className="w-full flex items-center justify-between opacity-50 mb-3 select-none">
+					{/* 左漸變紅條 */}
+					<div className="h-[2px] w-14 bg-gradient-to-r from-red-600 to-transparent" />
 
-				<LapDeltaCell />
-				<GearCell />
-				<PedalCell />
+					{/* 專案名稱 */}
+					<div className="text-[10px] font-black tracking-[0.3em] text-zinc-300 racing-text">
+						Time4ttack
+					</div>
 
-				<WheelCell cornerKey="rl" />
-				<InsightCell />
-				<WheelCell cornerKey="rr" />
+					{/* 右漸變紅條 */}
+					<div className="h-[2px] w-14 bg-gradient-to-l from-red-600 to-transparent" />
+				</div>
+
+				{/* 🏎️ 30/40/30 精準防跑版 Grid 骨架 */}
+				<div className="grid grid-cols-[30%_40%_30%] grid-rows-3 gap-y-12 w-full items-center justify-center flex-grow">
+					{/* Row 1: 左前輪 FL | GForce雷達 (40) | 右前輪 FR */}
+					<div className="flex items-center justify-center h-full">
+						<WheelCell cornerKey="fl" />
+					</div>
+					<div className="flex items-center justify-center h-full">
+						<GForceCell />
+					</div>
+					<div className="flex items-center justify-center h-full">
+						<WheelCell cornerKey="fr" />
+					</div>
+
+					{/* Row 2: 🚀 彈性避讓算法：窄螢幕下，LapDelta 向左微調偏移，Pedal 向右微調偏移，把中間 40% 的圓圈空間完美釋放！ */}
+					<div className="flex items-center justify-start sm:justify-center h-full pl-2 sm:pl-0">
+						<LapDeltaCell />
+					</div>
+					<div className="flex items-center justify-center h-full">
+						<GearCell />
+					</div>
+					<div className="flex items-center justify-end sm:justify-center h-full pr-2 sm:pr-0">
+						<PedalCell />
+					</div>
+
+					{/* Row 3: 左後輪 RL | 雷雕狀態文字 (40) | 右後輪 RR */}
+					<div className="flex items-center justify-center h-full">
+						<WheelCell cornerKey="rl" />
+					</div>
+					<div className="flex items-center justify-center h-full">
+						<InsightCell />
+					</div>
+					<div className="flex items-center justify-center h-full">
+						<WheelCell cornerKey="rr" />
+					</div>
+				</div>
+
+				{/* 底部點綴：極簡機甲卡榫 */}
+				<div className="w-full flex justify-between items-center opacity-30 mt-3 px-2">
+					<div className="h-[1px] w-4 bg-zinc-700" />
+					<div className="text-[7px] text-zinc-600 font-black tracking-[0.4em] select-none">
+						─ ♢ ─
+					</div>
+					<div className="h-[1px] w-4 bg-zinc-700" />
+				</div>
 			</div>
 		</main>
 	);
