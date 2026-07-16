@@ -33,3 +33,23 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# Node & Bun
+node_modules/
+.bun/
+
+# Vite build outputs
+dist/
+
+# Capacitor 原生編譯緩存與臨時檔案（極重要，不要傳上 GitHub！）
+ios/App/Pods/
+ios/App/build/
+ios/App/Podfile.lock
+android/build/
+android/app/build/
+.gradle/
+capacitor.config.json.bak
+
+# OS junk
+.DS_Store
+Thumbs.db
