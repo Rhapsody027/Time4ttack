@@ -1,6 +1,5 @@
 // src/useTelemetry.ts
 import { create } from "zustand";
-import { ZeroConf } from "capacitor-zeroconf";
 
 export type CornerKey = "fl" | "fr" | "rl" | "rr";
 export type Quad = Record<CornerKey, number>;
@@ -70,7 +69,8 @@ export type TelemetryStoreState = {
     hubIp: string;
     setHubIp: (ip: string) => void;
     initWebSocket: (targetIp?: string) => void;
-    startMdnsTest: () => void; // 🚀 mDNS 單純搜尋測試 Action
+    closeWebSocket: () => void; // 🚀 新增：主動斷開與清理機制
+    startMdnsDiscovery: () => void;
     setDisconnected: () => void;
 };
 
@@ -101,9 +101,11 @@ function createDefaultWheel(cornerKey: CornerKey): WheelView {
 
 const INITIAL_HUB_IP = localStorage.getItem("fh6_hub_ip") || "localhost";
 
-export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
-    let ws: WebSocket | null = null;
+// 🚀 執行緒安全的單例守衛：將實際的 WebSocket 實例移出 Zustand State，避免 React 重新渲染觸發複製
+let activeWs: WebSocket | null = null;
+let reconnectTimer: any = null;
 
+export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
     return {
         connected: false,
         lastPacketAt: null,
@@ -135,65 +137,111 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
         setHubIp: (ip) => {
             localStorage.setItem("fh6_hub_ip", ip);
             set({ hubIp: ip });
-            if (ws) {
-                ws.close();
-            }
+            get().closeWebSocket(); // IP 變更時，直接執行物理斷線重連
+            get().initWebSocket(ip);
         },
 
         initWebSocket: (targetIp) => {
             const activeIp = targetIp || get().hubIp;
             const url = `ws://${activeIp}:8765`; 
             
-            console.log(`[WS] Trying to connect to: ${url}`);
+            // 🚀 Singleton Guard 1: 如果目前連線正常，或者正在嘗試連線中，直接攔截，絕不建立第二條連線
+            if (activeWs) {
+                if (activeWs.readyState === WebSocket.OPEN || activeWs.readyState === WebSocket.CONNECTING) {
+                    console.log(`[WS Guard] 偵測到已有連線實例存在 (${activeWs.url})，攔截重複連線請求。`);
+                    return;
+                }
+                // 若殘留舊實例但已斷線，先清理
+                get().closeWebSocket();
+            }
+            
+            console.log(`[WS] 正在建立單一實例連線: ${url}`);
             
             const connect = () => {
-                if (ws && ws.readyState === WebSocket.CONNECTING) return;
-                
-                ws = new WebSocket(url);
-                ws.onopen = () => set({ connected: true, stale: false });
-                ws.onmessage = (e) => {
+                // 🚀 Singleton Guard 2: 雙重防禦
+                if (activeWs && (activeWs.readyState === WebSocket.OPEN || activeWs.readyState === WebSocket.CONNECTING)) {
+                    return;
+                }
+
+                activeWs = new WebSocket(url);
+
+                activeWs.onopen = () => {
+                    console.log(`[WS] 成功連線至 Hub: ${url}`);
+                    set({ connected: true, stale: false });
+                };
+
+                activeWs.onmessage = (e) => {
                     try {
                         const parsed = JSON.parse(e.data);
                         if (parsed.type === "telemetry" && parsed.data)
                             get().updateTelemetry(parsed.data);
                     } catch {}
                 };
-                ws.onclose = () => {
+
+                activeWs.onclose = (event) => {
+                    console.log(`[WS] 連線關閉 (Code: ${event.code})。3秒後自動嘗試重連...`);
                     get().setDisconnected();
-                    setTimeout(connect, 3000);
+                    
+                    // 清除可能殘留的計時器，避免堆疊
+                    if (reconnectTimer) clearTimeout(reconnectTimer);
+                    reconnectTimer = setTimeout(() => {
+                        connect();
+                    }, 3000);
                 };
-                ws.onerror = () => get().setDisconnected();
+
+                activeWs.onerror = () => {
+                    get().setDisconnected();
+                };
             };
+
             connect();
         },
 
-        // 🚀 【mDNS 單純搜尋測試，不連動 WebSocket 建立】
-        startMdnsTest: () => {
+        // 🚀 物理斷線與資源清理
+        closeWebSocket: () => {
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+            if (activeWs) {
+                console.log("[WS Guard] 執行物理斷線與監聽器釋放。");
+                activeWs.onopen = null;
+                activeWs.onmessage = null;
+                activeWs.onclose = null;
+                activeWs.onerror = null;
+                activeWs.close();
+                activeWs = null;
+            }
+            set({ connected: false, stale: true });
+        },
+
+        startMdnsDiscovery: async () => {
             const isCapacitor = (window as any).Capacitor !== undefined;
             if (!isCapacitor) {
-                console.log("[mDNS Test] 瀏覽器環境，跳過原生 Bonjour 搜尋。");
                 return;
             }
 
-            console.log("[mDNS Test] 正在開啟 iPhone 原生 Bonjour 監聽: _fh6hub._tcp.local...");
-
             try {
-                // 1. 設定原生事件監聽
-                ZeroConf.addListener('discover', (result: any) => {
-                    console.log(`[mDNS Test] 偵測到服務 [Action: ${result.action}]:`, result);
+                const { ZeroConf } = await import("capacitor-zeroconf");
+                console.log("[mDNS] 正在透過 Capacitor 啟動 iPhone 原生 Bonjour 監聽: _fh6hub._tcp...");
+
+                await ZeroConf.addListener('discover', (result: any) => {
                     if (result.action === 'resolved' && result.service) {
                         const service = result.service;
                         const ip = service.ipv4Addresses?.[0] || service.urls?.[0]?.split('/')?.[2]?.split(':')?.[0];
-                        console.log(`[mDNS Test] 🚀 成功自動解析！裝置名稱: ${service.name}, 取得 IP: ${ip}, Port: ${service.port}`);
+                        if (ip) {
+                            console.log(`[mDNS] 成功自動定位 Windows Hub！IP: ${ip}, Port: ${service.port}`);
+                            get().setHubIp(ip);
+                            get().initWebSocket(ip);
+                            
+                            ZeroConf.unwatch({ type: '_fh6hub._tcp.', domain: 'local.' }).catch(() => {});
+                        }
                     }
-                }).then(() => {
-                    // 2. 啟動 watch，監聽服務
-                    ZeroConf.watch({ type: '_fh6hub._tcp.', domain: 'local.' })
-                        .then((res: any) => console.log('[mDNS Test] watch 啟動成功，等待廣播...', res))
-                        .catch((err: any) => console.error('[mDNS Test] watch 啟動失敗:', err));
                 });
+
+                await ZeroConf.watch({ type: '_fh6hub._tcp.', domain: 'local.' });
             } catch (error) {
-                console.error("[mDNS Test] 呼叫 capacitor-zeroconf 失敗: ", error);
+                console.error("[mDNS] 發生錯誤:", error);
             }
         },
 
@@ -296,9 +344,8 @@ export function useTelemetry() {
     if (typeof globalThis !== "undefined" && "WebSocket" in globalThis) {
         const isCapacitor = (globalThis as any).Capacitor !== undefined;
         if (!store.connected && !useTelemetryStore.getState().connected) {
-            // 🚀 實機上，掛載時僅開啟 mDNS 測試，先不主動呼叫 initWebSocket 
             if (isCapacitor) {
-                setTimeout(() => store.startMdnsTest(), 0);
+                setTimeout(() => store.startMdnsDiscovery(), 0);
             } else {
                 setTimeout(() => store.initWebSocket(), 0);
             }

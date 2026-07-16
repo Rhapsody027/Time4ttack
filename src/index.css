@@ -9,14 +9,17 @@
 @layer base {
   body {
     margin: 0;
-    padding: 0;
+    /* 🚀 物理避讓核心：強制 WebView 遵循 iOS 物理安全邊界 */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
     color: #ffffff;
     overflow: hidden;
     font-family: 'Share Tech Mono', 'Orbitron', 'Courier New', Courier, monospace;
   }
 }
 
-/* 賽車感傾斜字體與高飽和度霓虹 */
 .racing-text {
   font-style: italic;
   font-weight: 900;
@@ -28,7 +31,7 @@
   filter: drop-shadow(0 0 6px rgba(255, 0, 85, 0.8));
 }
 
-/* 🚀 頂級 3D 立體乾式碳纖維編織背景 */
+/* 3D 立體乾式碳纖維編織背景 */
 .carbon-fiber-bg {
   background-color: #111216;
   background-image:
