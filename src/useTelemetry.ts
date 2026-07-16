@@ -1,6 +1,6 @@
 // src/useTelemetry.ts
 import { create } from "zustand";
-import { decodeFh6Packet } from "../server/decoder";
+import { ZeroConf } from "capacitor-zeroconf";
 
 export type CornerKey = "fl" | "fr" | "rl" | "rr";
 export type Quad = Record<CornerKey, number>;
@@ -67,13 +67,13 @@ export type TelemetryStoreState = {
         rank: string;
     };
     wheels: Record<CornerKey, WheelView>;
-    initWebSocket: () => void;
-    updateTelemetry: (data: BackendTelemetryData) => void;
-    updateFromRawPacket: (arrayBuffer: ArrayBuffer | Uint8Array) => void;
+    hubIp: string;
+    setHubIp: (ip: string) => void;
+    initWebSocket: (targetIp?: string) => void;
+    startMdnsTest: () => void; // 🚀 mDNS 單純搜尋測試 Action
     setDisconnected: () => void;
 };
 
-const WS_URL = import.meta.env.VITE_FH6_WS_URL ?? "ws://localhost:3001";
 const G_RANGE = 2.0;
 const G_RIM_RADIUS = 44;
 
@@ -99,6 +99,8 @@ function createDefaultWheel(cornerKey: CornerKey): WheelView {
     };
 }
 
+const INITIAL_HUB_IP = localStorage.getItem("fh6_hub_ip") || "localhost";
+
 export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
     let ws: WebSocket | null = null;
 
@@ -109,7 +111,7 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
         telemetry: null,
         rpmPercent: 0,
         shiftOn: false,
-        gearLabel: "--",
+        gearLabel: "N",
         speedDisplay: 0,
         gForceDot: { x: 50, y: 50 },
         pedalOverlap: false,
@@ -128,11 +130,26 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
             rl: createDefaultWheel("rl"),
             rr: createDefaultWheel("rr"),
         },
+        hubIp: INITIAL_HUB_IP,
 
-        initWebSocket: () => {
-            if (ws) return;
+        setHubIp: (ip) => {
+            localStorage.setItem("fh6_hub_ip", ip);
+            set({ hubIp: ip });
+            if (ws) {
+                ws.close();
+            }
+        },
+
+        initWebSocket: (targetIp) => {
+            const activeIp = targetIp || get().hubIp;
+            const url = `ws://${activeIp}:8765`; 
+            
+            console.log(`[WS] Trying to connect to: ${url}`);
+            
             const connect = () => {
-                ws = new WebSocket(WS_URL);
+                if (ws && ws.readyState === WebSocket.CONNECTING) return;
+                
+                ws = new WebSocket(url);
                 ws.onopen = () => set({ connected: true, stale: false });
                 ws.onmessage = (e) => {
                     try {
@@ -150,23 +167,45 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
             connect();
         },
 
+        // 🚀 【mDNS 單純搜尋測試，不連動 WebSocket 建立】
+        startMdnsTest: () => {
+            const isCapacitor = (window as any).Capacitor !== undefined;
+            if (!isCapacitor) {
+                console.log("[mDNS Test] 瀏覽器環境，跳過原生 Bonjour 搜尋。");
+                return;
+            }
+
+            console.log("[mDNS Test] 正在開啟 iPhone 原生 Bonjour 監聽: _fh6hub._tcp.local...");
+
+            try {
+                // 1. 設定原生事件監聽
+                ZeroConf.addListener('discover', (result: any) => {
+                    console.log(`[mDNS Test] 偵測到服務 [Action: ${result.action}]:`, result);
+                    if (result.action === 'resolved' && result.service) {
+                        const service = result.service;
+                        const ip = service.ipv4Addresses?.[0] || service.urls?.[0]?.split('/')?.[2]?.split(':')?.[0];
+                        console.log(`[mDNS Test] 🚀 成功自動解析！裝置名稱: ${service.name}, 取得 IP: ${ip}, Port: ${service.port}`);
+                    }
+                }).then(() => {
+                    // 2. 啟動 watch，監聽服務
+                    ZeroConf.watch({ type: '_fh6hub._tcp.', domain: 'local.' })
+                        .then((res: any) => console.log('[mDNS Test] watch 啟動成功，等待廣播...', res))
+                        .catch((err: any) => console.error('[mDNS Test] watch 啟動失敗:', err));
+                });
+            } catch (error) {
+                console.error("[mDNS Test] 呼叫 capacitor-zeroconf 失敗: ", error);
+            }
+        },
+
         setDisconnected: () =>
             set({
                 connected: false,
                 stale: true,
-                gearLabel: "--",
+                gearLabel: "N",
                 speedDisplay: 0,
                 gForceDot: { x: 50, y: 50 },
                 freeRoam: true,
             }),
-
-        // 🚀 核心優化：專為手機 APP 設計的 120Hz 原生二進位直驅解碼，0開銷極致效能
-        updateFromRawPacket: (arrayBuffer) => {
-            const decoded = decodeFh6Packet(arrayBuffer);
-            if (decoded) {
-                get().updateTelemetry(decoded);
-            }
-        },
 
         updateTelemetry: (raw) => {
             const now = Date.now();
@@ -254,11 +293,15 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 export function useTelemetry() {
     const store = useTelemetryStore();
     
-    // 只有當不是 Capacitor 原生環境時，才在網頁端自動開啟 WebSocket 監聽
     if (typeof globalThis !== "undefined" && "WebSocket" in globalThis) {
         const isCapacitor = (globalThis as any).Capacitor !== undefined;
-        if (!isCapacitor && !store.connected && !useTelemetryStore.getState().connected) {
-            setTimeout(() => store.initWebSocket(), 0);
+        if (!store.connected && !useTelemetryStore.getState().connected) {
+            // 🚀 實機上，掛載時僅開啟 mDNS 測試，先不主動呼叫 initWebSocket 
+            if (isCapacitor) {
+                setTimeout(() => store.startMdnsTest(), 0);
+            } else {
+                setTimeout(() => store.initWebSocket(), 0);
+            }
         }
     }
     return store;
