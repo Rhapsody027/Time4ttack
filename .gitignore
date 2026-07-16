@@ -31,9 +31,7 @@ Thumbs.db
 .eslintcache
 .cache/
 
-# ==========================================
 # 📊 Diagnostics & Logs
-# ==========================================
 coverage/
 *.lcov
 logs/
