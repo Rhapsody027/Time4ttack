@@ -1,8 +1,9 @@
 # fh6-hub/discovery.py
 import socket
-import struct
+
 from zeroconf import IPVersion, ServiceInfo
 from zeroconf.asyncio import AsyncZeroconf
+
 
 class HubDiscovery:
     def __init__(self, port: int = 8765):
@@ -15,10 +16,10 @@ class HubDiscovery:
     def get_local_ip(self) -> str:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            s.connect(('8.8.8.8', 80))
+            s.connect(("8.8.8.8", 80))
             ip = s.getsockname()[0]
         except Exception:
-            ip = '127.0.0.1'
+            ip = "127.0.0.1"
         finally:
             s.close()
         return ip
@@ -30,9 +31,9 @@ class HubDiscovery:
 
         # 🚀 產品化規格：Properties 屬性對齊
         desc = {
-            'device_id': self.device_id,
-            'version': '1.0.0',
-            'websocket_port': str(self.port)
+            "device_id": self.device_id,
+            "version": "1.0.0",
+            "websocket_port": str(self.port),
         }
 
         # 🚀 產品化規格：
@@ -44,7 +45,7 @@ class HubDiscovery:
             addresses=[socket.inet_aton(local_ip)],
             port=self.port,
             properties=desc,
-            server=f"{hostname}.local."
+            server=f"{hostname}.local.",
         )
 
         print(f"[mDNS] 正在廣播服務: {self.service_info.name}")
