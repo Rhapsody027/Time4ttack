@@ -16,6 +16,8 @@ android/build/
 android/app/build/
 .gradle/
 capacitor.config.json.bak
+__pycache__/
+*.pyc
 
 # 🔒 Environment Variables & Configs
 .env
