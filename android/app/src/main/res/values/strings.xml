@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Time4ttack</string>
+    <string name="title_activity_main">Time4ttack</string>
+    <string name="package_name">com.time4ttack.fh6</string>
+    <string name="custom_url_scheme">com.time4ttack.fh6</string>
+</resources>

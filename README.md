@@ -1,15 +1,5 @@
-# fh12
+# 🏎️ Time4ttack - FH6 Telemetry Dashboard
 
-To install dependencies:
+An ultra-responsive, 120Hz real-time telemetry dashboard designed specifically for Forza Horizon 6. 
 
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.3.14. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+By leveraging native UDP sockets directly on your mobile device, this app operates entirely standalone. **No PC middleware, Node.js servers, or WebSocket relays are required.** Simply launch the app on your phone, configure your game, and hit the track.

@@ -1,35 +1,42 @@
-# dependencies (bun install)
-node_modules
-
-# output
-out
-dist
+# 📦 Dependencies & Package Managers
+node_modules/
+.bun/
 *.tgz
 
-# code coverage
-coverage
-*.lcov
+# 🚀 Build Outputs
+dist/
+out/
+*.tsbuildinfo
 
-# logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
-*.bin
+# 📱 Mobile Native Caches (Capacitor)
+ios/App/Pods/
+ios/App/build/
+ios/App/Podfile.lock
+android/build/
+android/app/build/
+.gradle/
+capacitor.config.json.bak
 
-# dotenv environment variable files
+# 🔒 Environment Variables & Configs
 .env
+.env.local
 .env.development.local
 .env.test.local
 .env.production.local
-.env.local
 
-# caches
-.eslintcache
-.cache
-*.tsbuildinfo
-
-# IntelliJ based IDEs
-.idea
-
-# Finder (MacOS) folder config
+# 💻 IDEs & OS Trash
 .DS_Store
+Thumbs.db
+.idea/
+.eslintcache
+.cache/
+
+# ==========================================
+# 📊 Diagnostics & Logs
+# ==========================================
+coverage/
+*.lcov
+logs/
+*.log
+*.bin
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
