@@ -109,6 +109,10 @@ export function InsightCell({ telemetry }: InsightCellProps) {
 						Retry
 					</button>
 				</div>
+
+				<div className="mt-2 border-t border-zinc-900/80 pt-2 text-[7px] leading-4 tracking-[0.14em] text-zinc-600 uppercase">
+					QR 會顯示在 Hub 電腦上，手機用相機掃描後會自動喚起 App。
+				</div>
 			</div>
 		</div>
 	);

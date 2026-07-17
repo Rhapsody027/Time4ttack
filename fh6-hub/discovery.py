@@ -24,6 +24,9 @@ class HubDiscovery:
             s.close()
         return ip
 
+    def get_pair_url(self) -> str:
+        return f"time4ttack://pair?host={self.get_local_ip()}&port={self.port}"
+
     async def start(self):
         self.aio_zeroconf = AsyncZeroconf(ip_version=IPVersion.V4Only)
         local_ip = self.get_local_ip()

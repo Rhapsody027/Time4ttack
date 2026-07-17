@@ -1,6 +1,7 @@
 // src/useTelemetry.ts
 import { useEffect, useRef } from "react";
 import { create } from "zustand";
+import { App } from "@capacitor/app";
 
 export type CornerKey = "fl" | "fr" | "rl" | "rr";
 export type Quad = Record<CornerKey, number>;
@@ -133,6 +134,25 @@ export function buildWebSocketUrl(target: string): string {
 	const endpoint = parseHubEndpoint(target);
 	if (!endpoint.host) return "ws://localhost:8765";
 	return `ws://${endpoint.host}:${endpoint.port}`;
+}
+
+export function buildPairUrl(target: string): string {
+	const endpoint = parseHubEndpoint(target);
+	if (!endpoint.host) return "time4ttack://pair";
+	return `time4ttack://pair?host=${encodeURIComponent(endpoint.host)}&port=${endpoint.port}`;
+}
+
+export function parsePairUrl(link: string): string {
+	try {
+		const parsed = new URL(link);
+		if (parsed.protocol !== "time4ttack:") return "";
+		const host = parsed.searchParams.get("host")?.trim() || "";
+		const port = parsed.searchParams.get("port")?.trim() || "8765";
+		if (!host) return "";
+		return `${host}:${port}`;
+	} catch {
+		return "";
+	}
 }
 
 export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
@@ -433,6 +453,22 @@ export function useTelemetry() {
 
 		return () => {
 			clearTimeout(timer);
+		};
+	}, [store]);
+
+	useEffect(() => {
+		const handleAppUrlOpen = (event: { url: string }) => {
+			const pairTarget = parsePairUrl(event.url);
+			if (!pairTarget) return;
+
+			store.setHubIp(pairTarget);
+			store.closeWebSocket();
+			store.initWebSocket(pairTarget);
+		};
+
+		const listener = App.addListener("appUrlOpen", handleAppUrlOpen);
+		return () => {
+			void listener.then((result) => result.remove());
 		};
 	}, [store]);
 	return store;

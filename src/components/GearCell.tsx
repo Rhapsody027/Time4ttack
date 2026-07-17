@@ -131,7 +131,7 @@ export function GearCell() {
 			<div className="relative h-44 w-44 aspect-square flex items-center justify-center scale-110">
 				{/* 正圓形現代紅黑金屬硬裝甲 */}
 				<div
-					className="absolute h-32 w-32 aspect-square rounded-full flex flex-col items-center justify-center bg-gradient-to-b from-[#1b1d24] via-[#050608] to-[#010102] border border-[#272a35]"
+					className="relative z-10 h-32 w-32 aspect-square overflow-hidden rounded-full flex flex-col items-center justify-center bg-gradient-to-b from-[#1b1d24] via-[#050608] to-[#010102] border border-[#272a35]"
 					style={{
 						boxShadow: shiftOn
 							? "0 16px 30px rgba(255, 0, 85, 0.35), 0 4px 10px rgba(0,0,0,0.8)"
@@ -168,7 +168,7 @@ export function GearCell() {
 				{/* 零延遲 Canvas 圓形繪圖畫布 */}
 				<canvas
 					ref={canvasRef}
-					className="absolute inset-0 h-full w-full aspect-square pointer-events-none z-20"
+					className="absolute inset-0 h-full w-full aspect-square pointer-events-none z-0"
 				/>
 			</div>
 		</div>
