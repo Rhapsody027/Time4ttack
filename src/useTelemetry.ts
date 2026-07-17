@@ -102,7 +102,9 @@ function createDefaultWheel(cornerKey: CornerKey): WheelView {
 }
 
 let activeWs: WebSocket | null = null;
+let activeWsUrl = "";
 let reconnectTimer: any = null;
+let connectTimeoutTimer: any = null;
 let isNativeListenerAttached = false;
 
 function parseHubEndpoint(target: string): { host: string; port: number } {
@@ -172,13 +174,16 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 			const url = buildWebSocketUrl(activeTarget);
 
 			if (activeWs) {
-				if (
+				if (activeWsUrl !== url) {
+					get().closeWebSocket();
+				} else if (
 					activeWs.readyState === WebSocket.OPEN ||
 					activeWs.readyState === WebSocket.CONNECTING
 				) {
 					return;
+				} else {
+					get().closeWebSocket();
 				}
-				get().closeWebSocket();
 			}
 
 			console.log(`[WS Pipeline] 建立單例連線至: ${url}`);
@@ -192,9 +197,24 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 					return;
 				}
 
+				activeWsUrl = url;
 				activeWs = new WebSocket(url);
 
+				if (connectTimeoutTimer) {
+					clearTimeout(connectTimeoutTimer);
+				}
+				connectTimeoutTimer = setTimeout(() => {
+					if (activeWs && activeWs.readyState === WebSocket.CONNECTING) {
+						console.error(`[WS] 連線逾時未完成: ${url}`);
+						activeWs.close();
+					}
+				}, 6000);
+
 				activeWs.onopen = () => {
+					if (connectTimeoutTimer) {
+						clearTimeout(connectTimeoutTimer);
+						connectTimeoutTimer = null;
+					}
 					console.log(`[WS] 成功連線: ${url}`);
 					set({ connected: true, stale: false });
 
@@ -214,6 +234,10 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 				};
 
 				activeWs.onclose = () => {
+					if (connectTimeoutTimer) {
+						clearTimeout(connectTimeoutTimer);
+						connectTimeoutTimer = null;
+					}
 					console.log(`[WS] 連線已中斷: ${url}。重新啟動 mDNS 搜尋...`);
 					get().setDisconnected();
 
@@ -243,6 +267,10 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 				clearTimeout(reconnectTimer);
 				reconnectTimer = null;
 			}
+			if (connectTimeoutTimer) {
+				clearTimeout(connectTimeoutTimer);
+				connectTimeoutTimer = null;
+			}
 			if (activeWs) {
 				activeWs.onopen = null;
 				activeWs.onmessage = null;
@@ -251,6 +279,7 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 				activeWs.close();
 				activeWs = null;
 			}
+			activeWsUrl = "";
 			set({ connected: false, stale: true });
 		},
 
