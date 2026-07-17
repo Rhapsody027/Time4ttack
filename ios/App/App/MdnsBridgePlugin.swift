@@ -23,8 +23,8 @@ public class MdnsBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
         
-        let descriptor = NWBrowseDescriptor.bonjour(type: "_fh6hub._tcp", domain: "local.")
-        browser = NWBrowser(descriptor: descriptor, parameters: parameters)
+        let descriptor = NWBrowser.Descriptor.bonjour(type: "_fh6hub._tcp", domain: "local.")
+        browser = NWBrowser(for: descriptor, using: parameters)
         
         browser?.browseResultsChangedHandler = { [weak self] results, changes in
             guard let self = self else { return }
