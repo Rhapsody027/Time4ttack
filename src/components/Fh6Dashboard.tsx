@@ -17,8 +17,15 @@ export function Fh6Dashboard() {
 	const label = statusLabel(telemetry.stale, telemetry.connected);
 
 	return (
-		// 🚀 物理避讓核心：pb-safe / pt-safe，完美繞開動態島、劉海與底部的 Home 條，上下界絕對不穿幫
-		<main className="relative flex h-screen w-screen select-none items-center justify-center carbon-fiber-bg text-white font-mono crt-screen overflow-hidden p-3 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+		<main
+			className="relative flex min-h-screen w-screen select-none items-center justify-center carbon-fiber-bg text-white font-mono crt-screen overflow-hidden px-4 py-4"
+			style={{
+				paddingTop: "max(1.15rem, env(safe-area-inset-top))",
+				paddingBottom: "max(1.15rem, env(safe-area-inset-bottom))",
+				paddingLeft: "max(1rem, env(safe-area-inset-left))",
+				paddingRight: "max(1rem, env(safe-area-inset-right))",
+			}}
+		>
 			{/* 背景淡紅戰術發光 */}
 			<div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_center,rgba(255,0,85,0.04)_0%,transparent_75%)]" />
 
@@ -30,9 +37,9 @@ export function Fh6Dashboard() {
 			) : null}
 
 			{/* 🏎️ 主儀表板面板 */}
-			<div className="relative z-10 flex h-full w-full max-w-[420px] flex-col justify-between py-4 px-3 bg-[#020204] border border-zinc-900/80 shadow-[0_0_40px_rgba(0,0,0,0.8)]">
+			<div className="relative z-10 flex h-full w-full max-w-[460px] flex-col gap-4 rounded-[28px] border border-zinc-900/80 bg-[#020204]/96 px-4 py-4 shadow-[0_0_40px_rgba(0,0,0,0.8)] backdrop-blur-[2px]">
 				{/* 頂部：Time4ttack */}
-				<div className="w-full flex items-center justify-between opacity-50 mb-3 select-none">
+				<div className="w-full flex items-center justify-between opacity-50 select-none">
 					{/* 左漸變紅條 */}
 					<div className="h-[2px] w-14 bg-gradient-to-r from-red-600 to-transparent" />
 
@@ -46,37 +53,37 @@ export function Fh6Dashboard() {
 				</div>
 
 				{/* 🏎️ 30/40/30 精準防跑版 Grid 骨架 */}
-				<div className="grid grid-cols-[30%_40%_30%] grid-rows-3 gap-y-12 w-full items-center justify-center flex-grow">
+				<div className="grid flex-1 min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_minmax(0,0.88fr)_minmax(0,1fr)] gap-x-3 gap-y-3 items-center justify-center">
 					{/* Row 1: FL | GForce雷達 | FR */}
-					<div className="flex items-center justify-center h-full">
+					<div className="flex min-h-0 min-w-0 items-center justify-center">
 						<WheelCell cornerKey="fl" />
 					</div>
-					<div className="flex items-center justify-center h-full">
+					<div className="flex min-h-0 min-w-0 items-center justify-center">
 						<GForceCell />
 					</div>
-					<div className="flex items-center justify-center h-full">
+					<div className="flex min-h-0 min-w-0 items-center justify-center">
 						<WheelCell cornerKey="fr" />
 					</div>
 
 					{/* Row 2: LapDelta | Gear | Pedal */}
-					<div className="flex items-center justify-start sm:justify-center h-full pl-2 sm:pl-0">
+					<div className="flex min-h-0 min-w-0 items-center justify-center">
 						<LapDeltaCell />
 					</div>
-					<div className="flex items-center justify-center h-full">
+					<div className="flex min-h-0 min-w-0 items-center justify-center">
 						<GearCell />
 					</div>
-					<div className="flex items-center justify-end sm:justify-center h-full pr-2 sm:pr-0">
+					<div className="flex min-h-0 min-w-0 items-center justify-center">
 						<PedalCell />
 					</div>
 
 					{/* Row 3: RL | 雷雕狀態文字 | RR */}
-					<div className="flex items-center justify-center h-full">
+					<div className="flex min-h-0 min-w-0 items-center justify-center">
 						<WheelCell cornerKey="rl" />
 					</div>
-					<div className="flex items-center justify-center h-full">
+					<div className="flex min-h-0 min-w-0 items-center justify-center">
 						<InsightCell telemetry={telemetry} />
 					</div>
-					<div className="flex items-center justify-center h-full">
+					<div className="flex min-h-0 min-w-0 items-center justify-center">
 						<WheelCell cornerKey="rr" />
 					</div>
 				</div>

@@ -23,15 +23,14 @@ export function PedalCell() {
 	const brake = telemetry?.brake ?? 0;
 
 	return (
-		<div className="relative flex flex-col items-center justify-center p-1">
-			{/* 🚀 核心優化：將單邊 w-8 縮窄至 w-5！這樣可以完美解鎖 gap-4，讓你修改外層 gap 隨心縮放！ */}
+		<div className="relative flex min-h-[132px] min-w-[120px] flex-col items-center justify-center rounded-[20px] border border-zinc-900/70 bg-black/20 p-2 backdrop-blur-[1px]">
 			<div className="flex h-24 items-end gap-2">
 				{/* THR (油門) */}
-				<div className="flex h-full w-5 flex-col items-center justify-between">
+				<div className="flex h-full w-6 flex-col items-center justify-between">
 					<div className="text-[7px] font-bold text-zinc-400 tracking-wider racing-text select-none">
 						THR
 					</div>
-					<div className="relative flex h-16 w-1.5 items-end bg-[#050508]">
+					<div className="relative flex h-16 w-2 items-end bg-[#050508]">
 						<div
 							className="w-full bg-[#00FF66] shadow-[0_0_8px_rgba(0,255,102,0.4)] transition-all duration-75"
 							style={{ height: `${clamp(throttle * 100, 0, 100)}%` }}
@@ -43,11 +42,11 @@ export function PedalCell() {
 				</div>
 
 				{/* BRK (煞車) */}
-				<div className="flex h-full w-5 flex-col items-center justify-between">
+				<div className="flex h-full w-6 flex-col items-center justify-between">
 					<div className="text-[7px] font-bold text-zinc-400 tracking-wider racing-text select-none">
 						BRK
 					</div>
-					<div className="relative flex h-16 w-1.5 items-end bg-[#050508]">
+					<div className="relative flex h-16 w-2 items-end bg-[#050508]">
 						<div
 							className="w-full bg-[#FF0055] shadow-[0_0_8px_rgba(255,0,85,0.4)] transition-all duration-75"
 							style={{ height: `${clamp(brake * 100, 0, 100)}%` }}
@@ -61,13 +60,14 @@ export function PedalCell() {
 
 			{/* 圓角警告標籤底盤 */}
 			<div
-				className={`mt-1.5 rounded-full px-2 py-0.5 text-[7px] font-bold tracking-widest racing-text transition-all duration-150 ${
+				className={`mt-2 min-h-[1.6rem] rounded-full px-2 py-0.5 text-[7px] font-bold tracking-widest racing-text transition-all duration-150 ${
 					pedalOverlap
 						? "bg-yellow-950/40 text-yellow-500 border border-yellow-500/30"
 						: "text-zinc-600"
 				}`}
+				style={{ whiteSpace: pedalOverlap ? "pre-line" : "nowrap" }}
 			>
-				{pedalOverlap ? "BRAKE OVERLAP" : "NOMINAL"}
+				{pedalOverlap ? "BRAKE\nOVERLAP" : "NOMINAL"}
 			</div>
 		</div>
 	);

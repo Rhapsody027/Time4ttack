@@ -129,10 +129,10 @@ export function GearCell() {
 		<div
 			className={`relative flex h-full w-full items-center justify-center transition-all duration-300 ${stale ? "opacity-30" : ""}`}
 		>
-			<div className="relative h-44 w-44 aspect-square flex items-center justify-center scale-110">
+			<div className="relative h-44 w-44 aspect-square flex items-center justify-center">
 				{/* 正圓形現代紅黑金屬硬裝甲 */}
 				<div
-					className="relative z-10 h-32 w-32 aspect-square overflow-visible isolate rounded-full flex flex-col items-center justify-center bg-gradient-to-b from-[#1b1d24] via-[#050608] to-[#010102] border border-[#272a35]"
+					className="relative z-10 flex h-36 w-36 items-center justify-center rounded-full border border-[#272a35] bg-gradient-to-b from-[#1b1d24] via-[#050608] to-[#010102] isolate"
 					style={{
 						boxShadow: shiftOn
 							? "0 16px 30px rgba(255, 0, 85, 0.35), 0 4px 10px rgba(0,0,0,0.8)"
@@ -140,29 +140,31 @@ export function GearCell() {
 					}}
 				>
 					{/* 紅白裝甲精細接縫線 */}
-					<div className="absolute inset-1 aspect-square rounded-full border border-black/90 pointer-events-none" />
+					<div className="absolute inset-[7px] rounded-full border border-black/90 pointer-events-none" />
 
-					{/* GEAR 標籤 */}
-					<span className="z-10 text-[8px] font-black tracking-[0.25em] text-zinc-500 racing-text mt-1 select-none">
-						GEAR
-					</span>
-
-					{/* 檔位字體微縮 (text-6xl) */}
-					<div
-						ref={gearTextRef}
-						className="relative z-20 font-mono text-6xl font-black leading-none transition-colors duration-75 racing-text text-zinc-100 whitespace-nowrap"
-					>
-						{displayGear}
-					</div>
-
-					{/* 時速與下邊緣拉開距離 */}
-					<div className="z-10 flex flex-col items-center justify-center -mt-1 mb-1">
-						<div className="font-mono text-xl font-black tracking-tight text-white racing-text">
-							{formatNumber(speedDisplay, 0)}
-						</div>
-						<span className="text-[7px] font-bold tracking-widest text-zinc-500 -mt-1.5 racing-text select-none">
-							KM/H
+					<div className="relative z-20 flex h-full w-full flex-col items-center justify-center overflow-visible">
+						{/* GEAR 標籤 */}
+						<span className="text-[8px] font-black tracking-[0.25em] text-zinc-500 racing-text select-none leading-none">
+							GEAR
 						</span>
+
+						{/* 檔位字體微縮 (text-6xl) */}
+						<div
+							ref={gearTextRef}
+							className="relative z-20 mt-1 font-mono text-6xl font-black leading-none transition-colors duration-75 racing-text text-zinc-100 whitespace-nowrap"
+						>
+							{displayGear}
+						</div>
+
+						{/* 時速與下邊緣拉開距離 */}
+						<div className="mt-1 flex flex-col items-center justify-center">
+							<div className="font-mono text-xl font-black tracking-tight text-white racing-text leading-none">
+								{formatNumber(speedDisplay, 0)}
+							</div>
+							<span className="text-[7px] font-bold tracking-widest text-zinc-500 -mt-1.5 racing-text select-none leading-none">
+								KM/H
+							</span>
+						</div>
 					</div>
 				</div>
 

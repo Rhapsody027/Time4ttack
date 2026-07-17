@@ -107,6 +107,7 @@ let activeWsUrl = "";
 let reconnectTimer: any = null;
 let connectTimeoutTimer: any = null;
 let isNativeListenerAttached = false;
+const ENABLE_MDNS_DISCOVERY = false;
 
 function parseHubEndpoint(target: string): { host: string; port: number } {
 	const trimmed = target.trim();
@@ -305,6 +306,11 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 
 		// 🚀 【完全移除舊第三方套件 import，改為直接對接我們手刻的本地原生 MdnsBridge 插件】
 		startMdnsDiscovery: async () => {
+			if (!ENABLE_MDNS_DISCOVERY) {
+				console.log("[mDNS Native] 已停用自動發現，改用 QR 深連結配對。");
+				return;
+			}
+
 			const capacitor = (window as any).Capacitor;
 			if (!capacitor) {
 				console.log("[mDNS Web] 瀏覽器環境，直接連線 localhost。");
@@ -440,6 +446,10 @@ export function useTelemetry() {
 
 		const isCapacitor = (globalThis as any).Capacitor !== undefined;
 		if (useTelemetryStore.getState().connected) {
+			return;
+		}
+
+		if (isCapacitor && !ENABLE_MDNS_DISCOVERY) {
 			return;
 		}
 
