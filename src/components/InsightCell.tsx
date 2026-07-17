@@ -1,5 +1,5 @@
 // src/components/InsightCell.tsx
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import type { TelemetryStoreState } from "../useTelemetry";
 import { buildWebSocketUrl } from "../useTelemetry";
 
@@ -8,14 +8,6 @@ type InsightCellProps = {
 };
 
 export function InsightCell({ telemetry }: InsightCellProps) {
-	const manualInputRef = useRef<HTMLInputElement | null>(null);
-
-	useEffect(() => {
-		if (manualInputRef.current) {
-			manualInputRef.current.value = telemetry.hubIp;
-		}
-	}, [telemetry.hubIp]);
-
 	const wsTarget = useMemo(
 		() => buildWebSocketUrl(telemetry.hubIp),
 		[telemetry.hubIp],
@@ -29,7 +21,7 @@ export function InsightCell({ telemetry }: InsightCellProps) {
 
 	return (
 		<div className="flex h-full w-full select-none items-stretch justify-center py-1">
-			<div className="flex h-full w-full flex-col justify-between border border-zinc-800/80 bg-zinc-950/85 px-2 py-2 shadow-[0_0_18px_rgba(0,0,0,0.35)]">
+			<div className="flex h-full w-full flex-col justify-center gap-2 border border-zinc-800/80 bg-zinc-950/85 px-2 py-2 shadow-[0_0_18px_rgba(0,0,0,0.35)]">
 				{/*
 					未來這裡會換成駕駛技術評分系統。
 					原本的識別文案先保留，等 scoring 功能實作時直接接回。
@@ -42,7 +34,7 @@ export function InsightCell({ telemetry }: InsightCellProps) {
 				<div className="flex items-center justify-between gap-2">
 					<div className="min-w-0">
 						<div className="text-[7px] font-black tracking-[0.25em] text-zinc-400 uppercase">
-							Pair Hub
+							QR Pairing
 						</div>
 						<div className="mt-1 truncate text-[7px] tracking-[0.16em] text-zinc-600">
 							{wsTarget}
@@ -53,65 +45,8 @@ export function InsightCell({ telemetry }: InsightCellProps) {
 					</div>
 				</div>
 
-				<div className="grid grid-cols-[1fr_auto] gap-2">
-					<input
-						ref={manualInputRef}
-						defaultValue={telemetry.hubIp}
-						autoCapitalize="none"
-						autoCorrect="off"
-						spellCheck={false}
-						placeholder="192.168.1.10 / time4ttack.local"
-						className="min-w-0 border border-zinc-800 bg-black/60 px-2 py-1.5 text-[8px] tracking-[0.14em] text-zinc-100 outline-none placeholder:text-zinc-600 select-text"
-					/>
-					<button
-						type="button"
-						onClick={() => {
-							const manualTarget = manualInputRef.current?.value.trim() || "";
-							if (!manualTarget) return;
-							telemetry.setHubIp(manualTarget);
-							telemetry.closeWebSocket();
-							telemetry.initWebSocket(manualTarget);
-						}}
-						className="border border-red-600/70 bg-red-600/10 px-2 py-1.5 text-[7px] font-black tracking-[0.18em] text-red-200 uppercase"
-					>
-						Go
-					</button>
-				</div>
-
-				<div className="grid grid-cols-3 gap-2">
-					<button
-						type="button"
-						onClick={() => telemetry.startMdnsDiscovery()}
-						className="border border-zinc-800 bg-zinc-900/70 px-2 py-1.5 text-[7px] font-black tracking-[0.18em] text-zinc-200 uppercase"
-					>
-						Scan
-					</button>
-					<button
-						type="button"
-						onClick={() => {
-							if (navigator.clipboard?.writeText) {
-								void navigator.clipboard.writeText(wsTarget);
-							}
-						}}
-						className="border border-zinc-800 bg-zinc-900/70 px-2 py-1.5 text-[7px] font-black tracking-[0.18em] text-zinc-200 uppercase"
-					>
-						Copy
-					</button>
-					<button
-						type="button"
-						onClick={() => {
-							telemetry.closeWebSocket();
-							const manualTarget = manualInputRef.current?.value.trim() || "";
-							telemetry.initWebSocket(manualTarget);
-						}}
-						className="border border-zinc-800 bg-zinc-900/70 px-2 py-1.5 text-[7px] font-black tracking-[0.18em] text-zinc-200 uppercase"
-					>
-						Retry
-					</button>
-				</div>
-
-				<div className="mt-2 border-t border-zinc-900/80 pt-2 text-[7px] leading-4 tracking-[0.14em] text-zinc-600 uppercase">
-					QR 會顯示在 Hub 電腦上，手機用相機掃描後會自動喚起 App。
+				<div className="text-[7px] leading-4 tracking-[0.14em] text-zinc-600 uppercase">
+					Use the QR shown on the hub computer to open the app and auto-connect.
 				</div>
 			</div>
 		</div>

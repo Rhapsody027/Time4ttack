@@ -132,7 +132,7 @@ export function GearCell() {
 			<div className="relative h-44 w-44 aspect-square flex items-center justify-center scale-110">
 				{/* 正圓形現代紅黑金屬硬裝甲 */}
 				<div
-					className="relative z-10 h-32 w-32 aspect-square overflow-hidden rounded-full flex flex-col items-center justify-center bg-gradient-to-b from-[#1b1d24] via-[#050608] to-[#010102] border border-[#272a35]"
+					className="relative z-10 h-32 w-32 aspect-square overflow-visible isolate rounded-full flex flex-col items-center justify-center bg-gradient-to-b from-[#1b1d24] via-[#050608] to-[#010102] border border-[#272a35]"
 					style={{
 						boxShadow: shiftOn
 							? "0 16px 30px rgba(255, 0, 85, 0.35), 0 4px 10px rgba(0,0,0,0.8)"
@@ -150,7 +150,7 @@ export function GearCell() {
 					{/* 檔位字體微縮 (text-6xl) */}
 					<div
 						ref={gearTextRef}
-						className="z-10 font-mono text-6xl font-black leading-none transition-colors duration-75 racing-text text-zinc-100"
+						className="relative z-20 font-mono text-6xl font-black leading-none transition-colors duration-75 racing-text text-zinc-100 whitespace-nowrap"
 					>
 						{displayGear}
 					</div>
