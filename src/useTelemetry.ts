@@ -72,7 +72,7 @@ export type TelemetryStoreState = {
     closeWebSocket: () => void;
     startMdnsDiscovery: () => void;
     setDisconnected: () => void;
-    updateTelemetry: (data: BackendTelemetryData) => void; // 🚀 在型別中確實宣告
+    updateTelemetry: (data: BackendTelemetryData) => void;
 };
 
 const G_RANGE = 2.0;
@@ -100,10 +100,9 @@ function createDefaultWheel(cornerKey: CornerKey): WheelView {
     };
 }
 
-const INITIAL_HUB_IP = localStorage.getItem("fh6_hub_ip") || "localhost";
-
 let activeWs: WebSocket | null = null;
 let reconnectTimer: any = null;
+let isNativeListenerAttached = false;
 
 export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
     return {
@@ -132,13 +131,11 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
             rl: createDefaultWheel("rl"),
             rr: createDefaultWheel("rr"),
         },
-        hubIp: INITIAL_HUB_IP,
+        hubIp: localStorage.getItem("fh6_hub_ip") || "localhost",
 
         setHubIp: (ip) => {
             localStorage.setItem("fh6_hub_ip", ip);
             set({ hubIp: ip });
-            get().closeWebSocket();
-            get().initWebSocket(ip);
         },
 
         initWebSocket: (targetIp) => {
@@ -147,13 +144,12 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
             
             if (activeWs) {
                 if (activeWs.readyState === WebSocket.OPEN || activeWs.readyState === WebSocket.CONNECTING) {
-                    console.log(`[WS Guard] 連線實例已存在，攔截重複連線。`);
                     return;
                 }
                 get().closeWebSocket();
             }
             
-            console.log(`[WS] 正在建立連線: ${url}`);
+            console.log(`[WS Pipeline] 建立單例連線至: ${url}`);
             
             const connect = () => {
                 if (activeWs && (activeWs.readyState === WebSocket.OPEN || activeWs.readyState === WebSocket.CONNECTING)) {
@@ -165,24 +161,36 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
                 activeWs.onopen = () => {
                     console.log(`[WS] 成功連線: ${url}`);
                     set({ connected: true, stale: false });
+                    
+                    // 🚀 物理斷開，不再依賴 capacitor-zeroconf import
+                    const capacitor = (window as any).Capacitor;
+                    if (capacitor && capacitor.Plugins.MdnsBridge) {
+                        capacitor.Plugins.MdnsBridge.stopDiscovery();
+                    }
                 };
 
                 activeWs.onmessage = (e) => {
                     try {
                         const parsed = JSON.parse(e.data);
                         if (parsed.type === "telemetry" && parsed.data)
-                            get().updateTelemetry(parsed.data); // 🚀 修正 1：現在此 Action 在實作中已被確實定義，不再報錯 2339
+                            get().updateTelemetry(parsed.data);
                     } catch {}
                 };
 
-                activeWs.onclose = (event) => {
-                    console.log(`[WS] 連線關閉。3秒後重連...`);
+                activeWs.onclose = () => {
+                    console.log(`[WS] 連線已中斷。重新啟動 mDNS 搜尋...`);
                     get().setDisconnected();
                     
-                    if (reconnectTimer) clearTimeout(reconnectTimer);
-                    reconnectTimer = setTimeout(() => {
-                        connect();
-                    }, 3000);
+                    const capacitor = (window as any).Capacitor;
+                    if (capacitor) {
+                        if (reconnectTimer) clearTimeout(reconnectTimer);
+                        reconnectTimer = setTimeout(() => {
+                            get().startMdnsDiscovery();
+                        }, 2000);
+                    } else {
+                        if (reconnectTimer) clearTimeout(reconnectTimer);
+                        reconnectTimer = setTimeout(() => connect(), 3000);
+                    }
                 };
 
                 activeWs.onerror = () => {
@@ -199,7 +207,6 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
                 reconnectTimer = null;
             }
             if (activeWs) {
-                console.log("[WS Guard] 執行物理斷開。");
                 activeWs.onopen = null;
                 activeWs.onmessage = null;
                 activeWs.onclose = null;
@@ -210,31 +217,40 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
             set({ connected: false, stale: true });
         },
 
+        // 🚀 【完全移除舊第三方套件 import，改為直接對接我們手刻的本地原生 MdnsBridge 插件】
         startMdnsDiscovery: async () => {
-            const isCapacitor = (window as any).Capacitor !== undefined;
-            if (!isCapacitor) {
+            const capacitor = (window as any).Capacitor;
+            if (!capacitor) {
+                console.log("[mDNS Web] 瀏覽器環境，直接連線 localhost。");
+                get().initWebSocket("localhost");
+                return;
+            }
+
+            // 🚀 關鍵修改：直接從 Capacitor 的全域 Plugins 容器動態讀取，
+            // 這樣 Vite 編譯時就不會去解析 node_modules，100% 繞過靜態編譯限制！
+            const MdnsBridge = capacitor.Plugins.MdnsBridge;
+            if (!MdnsBridge) {
+                console.error("[mDNS Native] 找不到自製原生 MdnsBridge 插件，請確認 Xcode 註冊正確。");
                 return;
             }
 
             try {
-                const { ZeroConf } = await import("capacitor-zeroconf");
-                console.log("[mDNS] 啟動原生 Bonjour 監聽...");
-
-                await ZeroConf.addListener('discover', (result: any) => {
-                    if (result.action === 'resolved' && result.service) {
-                        const service = result.service;
-                        const ip = service.ipv4Addresses?.[0] || service.urls?.[0]?.split('/')?.[2]?.split(':')?.[0];
-                        if (ip) {
-                            get().setHubIp(ip);
-                            get().initWebSocket(ip);
-                            ZeroConf.unwatch({ type: '_fh6hub._tcp.', domain: 'local.' }).catch(() => {});
+                if (!isNativeListenerAttached) {
+                    // 綁定自製插件的監聽器
+                    await MdnsBridge.addListener('onHubDiscovered', (data: any) => {
+                        if (data && data.ip) {
+                            console.log(`[mDNS Discovery] 🚀 自動發現 Windows Hub! IP: ${data.ip}, Port: ${data.port}`);
+                            get().setHubIp(data.ip);
+                            get().initWebSocket(data.ip);
                         }
-                    }
-                });
+                    });
+                    isNativeListenerAttached = true;
+                }
 
-                await ZeroConf.watch({ type: '_fh6hub._tcp.', domain: 'local.' });
-            } catch (error) {
-                console.error("[mDNS] 發生錯誤:", error);
+                console.log("[mDNS Native] 呼叫 iOS Swift 原生網路框架尋找 Hub...");
+                await MdnsBridge.startDiscovery();
+            } catch (err) {
+                console.error("[mDNS Native] 啟動自動發現失敗: ", err);
             }
         },
 
@@ -248,37 +264,23 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
                 freeRoam: true,
             }),
 
-        // 🚀 修正 2：明確將 raw 宣告為 BackendTelemetryData，徹底抹除 implicit any (7006) 報錯
         updateTelemetry: (raw: BackendTelemetryData) => {
             const now = Date.now();
-            const rpmPercent =
-                raw.rpmMax > 0 ? clamp((raw.rpm / raw.rpmMax) * 100, 0, 100) : 0;
-
+            const rpmPercent = raw.rpmMax > 0 ? clamp((raw.rpm / raw.rpmMax) * 100, 0, 100) : 0;
             const gForceDot = {
                 x: 50 - (raw.gForce.lateral / G_RANGE) * G_RIM_RADIUS,
                 y: 50 + (raw.gForce.longitudinal / G_RANGE) * G_RIM_RADIUS,
             };
-
             const isFreeRoam = raw.lap.number === 0 && raw.lap.racePosition === 0;
 
             const updatedWheels = (["fl", "fr", "rl", "rr"] as CornerKey[]).reduce(
                 (acc, key) => {
                     let rawRatio = raw.slipRatio[key];
                     const rawAngle = Math.abs(raw.slipAngle[key]);
-
                     const isFront = key === "fl" || key === "fr";
-
                     if (isFront && rawRatio > 0 && raw.brake === 0) rawRatio = 0;
                     if (!isFront && rawRatio < 0 && raw.throttle === 0) rawRatio = 0;
-
                     const ratioMag = Math.abs(rawRatio);
-
-                    const isRatioOut = ratioMag > 1.0;
-                    const isAngleOut = rawAngle > 1.0;
-
-                    const ratioPercent = isRatioOut ? 140 : ratioMag * 100;
-                    const anglePercent = isAngleOut ? 140 : rawAngle * 100;
-
                     acc[key] = {
                         label: key.toUpperCase(),
                         cornerKey: key,
@@ -287,10 +289,10 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
                         slipAngle: raw.slipAngle[key],
                         suspensionMeters: raw.suspensionMeters[key],
                         loadScore: raw.suspensionMeters[key],
-                        ratioPercent,
-                        anglePercent,
-                        isRatioOut,
-                        isAngleOut,
+                        ratioPercent: ratioMag > 1.0 ? 140 : ratioMag * 100,
+                        anglePercent: rawAngle > 1.0 ? 140 : rawAngle * 100,
+                        isRatioOut: ratioMag > 1.0,
+                        isAngleOut: rawAngle > 1.0,
                         isRatioPeak: false,
                         isAnglePeak: false,
                     };
@@ -305,8 +307,7 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
                 stale: false,
                 rpmPercent,
                 shiftOn: rpmPercent >= 95,
-                gearLabel:
-                    raw.gear === 0 ? "R" : raw.gear === 15 ? "N" : String(raw.gear),
+                gearLabel: raw.gear === 0 ? "R" : raw.gear === 15 ? "N" : String(raw.gear),
                 speedDisplay: Math.round(raw.speedKmh),
                 gForceDot,
                 pedalOverlap: raw.throttle > 0.1 && raw.brake > 0.1,
@@ -334,7 +335,6 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 
 export function useTelemetry() {
     const store = useTelemetryStore();
-    
     if (typeof globalThis !== "undefined" && "WebSocket" in globalThis) {
         const isCapacitor = (globalThis as any).Capacitor !== undefined;
         if (!store.connected && !useTelemetryStore.getState().connected) {
