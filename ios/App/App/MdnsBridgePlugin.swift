@@ -13,6 +13,7 @@ public class MdnsBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     
     private var browser: NWBrowser?
     private var isSearching = false
+    private var lastDiscoveredTarget: String?
     
     @objc func startDiscovery(_ call: CAPPluginCall) {
         if isSearching {
@@ -31,21 +32,29 @@ public class MdnsBridgePlugin: CAPPlugin, CAPBridgedPlugin {
             for result in results {
                 if case let .bonjour(txtRecord) = result.metadata {
                     if case let .hostPort(host, port) = result.endpoint {
-                        var ipAddress = ""
+                        var hostTarget = ""
                         switch host {
                         case .ipv4(let ipv4Address):
-                            ipAddress = ipv4Address.debugDescription
+                            hostTarget = ipv4Address.debugDescription.trimmingCharacters(in: .whitespacesAndNewlines)
                         case .name(let name, _):
-                            ipAddress = name.replacingOccurrences(of: ".local", with: "")
+                            hostTarget = name.trimmingCharacters(in: CharacterSet(charactersIn: "."))
                         default:
                             continue
                         }
                         
-                        if !ipAddress.isEmpty && !ipAddress.contains(":") {
+                        if !hostTarget.isEmpty && !hostTarget.contains(":") {
+                            if self.lastDiscoveredTarget == hostTarget {
+                                continue
+                            }
+                            self.lastDiscoveredTarget = hostTarget
+
+                            let websocketURL = "ws://\(hostTarget):\(port.rawValue)"
                             let data: [String: Any] = [
                                 "name": "Time4ttack-FH6-Hub",
-                                "ip": ipAddress,
-                                "port": Int(port.rawValue)
+                                "host": hostTarget,
+                                "ip": hostTarget,
+                                "port": Int(port.rawValue),
+                                "url": websocketURL
                             ]
                             self.notifyListeners("onHubDiscovered", data: data)
                         }
@@ -72,6 +81,7 @@ public class MdnsBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         browser?.cancel()
         browser = nil
         isSearching = false
+        lastDiscoveredTarget = nil
         call.resolve(["status": "stopped"])
     }
 }
