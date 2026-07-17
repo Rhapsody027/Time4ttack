@@ -1,5 +1,5 @@
 // src/components/InsightCell.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { TelemetryStoreState } from "../useTelemetry";
 import { buildWebSocketUrl } from "../useTelemetry";
 
@@ -8,10 +8,12 @@ type InsightCellProps = {
 };
 
 export function InsightCell({ telemetry }: InsightCellProps) {
-	const [manualTarget, setManualTarget] = useState(telemetry.hubIp);
+	const manualInputRef = useRef<HTMLInputElement | null>(null);
 
 	useEffect(() => {
-		setManualTarget(telemetry.hubIp);
+		if (manualInputRef.current) {
+			manualInputRef.current.value = telemetry.hubIp;
+		}
 	}, [telemetry.hubIp]);
 
 	const wsTarget = useMemo(
@@ -53,17 +55,19 @@ export function InsightCell({ telemetry }: InsightCellProps) {
 
 				<div className="grid grid-cols-[1fr_auto] gap-2">
 					<input
-						value={manualTarget}
-						onChange={(event) => setManualTarget(event.target.value)}
+						ref={manualInputRef}
+						defaultValue={telemetry.hubIp}
 						autoCapitalize="none"
 						autoCorrect="off"
 						spellCheck={false}
 						placeholder="192.168.1.10 / time4ttack.local"
-						className="min-w-0 border border-zinc-800 bg-black/60 px-2 py-1.5 text-[8px] tracking-[0.14em] text-zinc-100 outline-none placeholder:text-zinc-600"
+						className="min-w-0 border border-zinc-800 bg-black/60 px-2 py-1.5 text-[8px] tracking-[0.14em] text-zinc-100 outline-none placeholder:text-zinc-600 select-text"
 					/>
 					<button
 						type="button"
 						onClick={() => {
+							const manualTarget = manualInputRef.current?.value.trim() || "";
+							if (!manualTarget) return;
 							telemetry.setHubIp(manualTarget);
 							telemetry.closeWebSocket();
 							telemetry.initWebSocket(manualTarget);
@@ -97,6 +101,7 @@ export function InsightCell({ telemetry }: InsightCellProps) {
 						type="button"
 						onClick={() => {
 							telemetry.closeWebSocket();
+							const manualTarget = manualInputRef.current?.value.trim() || "";
 							telemetry.initWebSocket(manualTarget);
 						}}
 						className="border border-zinc-800 bg-zinc-900/70 px-2 py-1.5 text-[7px] font-black tracking-[0.18em] text-zinc-200 uppercase"
