@@ -101,7 +101,8 @@ export function GearCell() {
 			if (gearTextRef.current) {
 				if (isRed) {
 					gearTextRef.current.style.color = "#FF0055";
-					gearTextRef.current.classList.add("cyber-glow-red", "scale-105");
+					gearTextRef.current.classList.add("cyber-glow-red");
+					gearTextRef.current.classList.remove("scale-105");
 				} else {
 					gearTextRef.current.style.color = "#F4F4F5";
 					gearTextRef.current.classList.remove("cyber-glow-red", "scale-105");
@@ -149,7 +150,7 @@ export function GearCell() {
 					{/* 檔位字體微縮 (text-6xl) */}
 					<div
 						ref={gearTextRef}
-						className="z-10 font-mono text-6xl font-black leading-none transition-all duration-75 racing-text text-zinc-100"
+						className="z-10 font-mono text-6xl font-black leading-none transition-colors duration-75 racing-text text-zinc-100"
 					>
 						{displayGear}
 					</div>

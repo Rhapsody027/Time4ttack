@@ -439,37 +439,38 @@ export function useTelemetry() {
 		}
 
 		const isCapacitor = (globalThis as any).Capacitor !== undefined;
-		if (store.connected || useTelemetryStore.getState().connected) {
+		if (useTelemetryStore.getState().connected) {
 			return;
 		}
 
 		const timer = setTimeout(() => {
 			if (isCapacitor) {
-				store.startMdnsDiscovery();
+				useTelemetryStore.getState().startMdnsDiscovery();
 			} else {
-				store.initWebSocket();
+				useTelemetryStore.getState().initWebSocket();
 			}
 		}, 0);
 
 		return () => {
 			clearTimeout(timer);
 		};
-	}, [store]);
+	}, []);
 
 	useEffect(() => {
 		const handleAppUrlOpen = (event: { url: string }) => {
 			const pairTarget = parsePairUrl(event.url);
 			if (!pairTarget) return;
 
-			store.setHubIp(pairTarget);
-			store.closeWebSocket();
-			store.initWebSocket(pairTarget);
+			const currentStore = useTelemetryStore.getState();
+			currentStore.setHubIp(pairTarget);
+			currentStore.closeWebSocket();
+			currentStore.initWebSocket(pairTarget);
 		};
 
 		const listener = App.addListener("appUrlOpen", handleAppUrlOpen);
 		return () => {
 			void listener.then((result) => result.remove());
 		};
-	}, [store]);
+	}, []);
 	return store;
 }
