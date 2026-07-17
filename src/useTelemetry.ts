@@ -1,4 +1,5 @@
 // src/useTelemetry.ts
+import { useEffect, useRef } from "react";
 import { create } from "zustand";
 
 export type CornerKey = "fl" | "fr" | "rl" | "rr";
@@ -377,15 +378,32 @@ export const useTelemetryStore = create<TelemetryStoreState>((set, get) => {
 
 export function useTelemetry() {
 	const store = useTelemetryStore();
-	if (typeof globalThis !== "undefined" && "WebSocket" in globalThis) {
-		const isCapacitor = (globalThis as any).Capacitor !== undefined;
-		if (!store.connected && !useTelemetryStore.getState().connected) {
-			if (isCapacitor) {
-				setTimeout(() => store.startMdnsDiscovery(), 0);
-			} else {
-				setTimeout(() => store.initWebSocket(), 0);
-			}
+	const autoStartRef = useRef(false);
+
+	useEffect(() => {
+		if (autoStartRef.current) return;
+		autoStartRef.current = true;
+
+		if (typeof globalThis === "undefined" || !("WebSocket" in globalThis)) {
+			return;
 		}
-	}
+
+		const isCapacitor = (globalThis as any).Capacitor !== undefined;
+		if (store.connected || useTelemetryStore.getState().connected) {
+			return;
+		}
+
+		const timer = setTimeout(() => {
+			if (isCapacitor) {
+				store.startMdnsDiscovery();
+			} else {
+				store.initWebSocket();
+			}
+		}, 0);
+
+		return () => {
+			clearTimeout(timer);
+		};
+	}, [store]);
 	return store;
 }
