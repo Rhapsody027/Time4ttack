@@ -23,7 +23,7 @@ export function PedalCell() {
 	const brake = telemetry?.brake ?? 0;
 
 	return (
-		<div className="relative flex min-h-[132px] min-w-[120px] flex-col items-center justify-center rounded-[20px] border border-zinc-900/70 bg-black/20 p-2 backdrop-blur-[1px]">
+		<div className="relative flex min-h-[132px] min-w-[120px] flex-col items-center justify-center rounded-[20px] bg-black/20 p-2 backdrop-blur-[1px]">
 			<div className="flex h-24 items-end gap-2">
 				{/* THR (油門) */}
 				<div className="flex h-full w-6 flex-col items-center justify-between">

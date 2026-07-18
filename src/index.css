@@ -9,11 +9,6 @@
 @layer base {
   body {
     margin: 0;
-    /* 🚀 物理避讓核心：強制 WebView 遵循 iOS 物理安全邊界 */
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
     color: #ffffff;
     overflow: hidden;
     font-family: 'Share Tech Mono', 'Orbitron', 'Courier New', Courier, monospace;
